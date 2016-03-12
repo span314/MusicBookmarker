@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingBottom="@dimen/activity_vertical_margin"
+    android:paddingLeft="@dimen/activity_horizontal_margin"
+    android:paddingRight="@dimen/activity_horizontal_margin"
+    android:paddingTop="@dimen/activity_vertical_margin"
+    android:orientation="vertical"
+    tools:context="com.shawnpan.musicbookmarker.MusicPlayerActivity">
+
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Program"
+        android:onClick="tempSelectMusic"
+        android:id="@+id/temp_start"/>
+
+    <com.shawnpan.musicbookmarker.MusicSeekBar
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/seek_bar"/>
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="16dp">
+
+        <ImageButton
+            android:id="@+id/reset_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:src="@drawable/ic_skip_previous_white_48dp"
+            android:background="@color/primary_material_dark"
+            android:paddingBottom="8dp"
+            android:paddingTop="8dp"
+            android:layout_margin="2dp"/>
+
+        <ImageButton
+            android:id="@+id/previous_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:src="@drawable/ic_navigate_before_white_48dp"
+            android:background="@color/primary_material_dark"
+            android:paddingBottom="8dp"
+            android:paddingTop="8dp"
+            android:layout_margin="2dp"/>
+
+        <ImageButton
+            android:id="@+id/play_pause_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:src="@drawable/ic_pause_white_48dp"
+            android:background="@color/primary_material_dark"
+            android:paddingBottom="8dp"
+            android:paddingTop="8dp"
+            android:layout_margin="2dp"/>
+
+        <ImageButton
+            android:id="@+id/next_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:src="@drawable/ic_navigate_next_white_48dp"
+            android:background="@color/primary_material_dark"
+            android:paddingBottom="8dp"
+            android:paddingTop="8dp"
+            android:layout_margin="2dp"/>
+
+        <ImageButton
+            android:id="@+id/play_mode_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:src="@drawable/ic_repeat_white_48dp"
+            android:background="@color/primary_material_dark"
+            android:paddingBottom="8dp"
+            android:paddingTop="8dp"
+            android:layout_margin="2dp"/>
+
+    </LinearLayout>
+</LinearLayout>

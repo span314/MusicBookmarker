@@ -68,7 +68,8 @@ public class MusicPlayerActivity extends ActionBarActivity {
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
         String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
         String where = MediaStore.Audio.Media.TITLE + " like ?";
-        String[] args = new String[]{"%Starlight%"};
+        //String[] args = new String[]{"%rack%"};
+        String[] args = new String[]{"%tarlight%"};
         String orderBy = MediaStore.Audio.Media.TITLE + " ASC";
 
         Cursor cursor = getContentResolver().query(uri, select, where, args, orderBy);
@@ -173,7 +174,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
             progressUpdateHandler.removeCallbacks(progressUpdateRunnable);
             int currentTime = musicService.getCurrentTime();
             int duration = musicService.getDuration();
-            Log.v(TAG, "C " + currentTime + " D " + duration + " R " + musicService.isRepeat());
+            //Log.v(TAG, "C " + currentTime + " D " + duration + " R " + musicService.isRepeat());
             musicSeekBar.updateTime(currentTime, duration);
             progressUpdateHandler.postDelayed(progressUpdateRunnable, 500);
         }

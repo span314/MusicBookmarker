@@ -116,6 +116,7 @@ public class MusicService extends Service {
             mediaPlayer.setOnPreparedListener(onPreparedListener);
             mediaPlayer.setOnCompletionListener(onCompletionListener);
             mediaPlayer.setOnErrorListener(onErrorListener);
+            mediaPlayer.setOnSeekCompleteListener(onSeekCompleteListener);
         } else {
             mediaPlayer.reset();
             mediaState = MediaState.STOPPED;
@@ -135,9 +136,11 @@ public class MusicService extends Service {
     private MediaPlayer.OnPreparedListener onPreparedListener = new MediaPlayer.OnPreparedListener() {
         @Override
         public void onPrepared(MediaPlayer mp) {
-            //mediaPlayer.seekTo(90000);
+            Log.v(TAG, "onprepared");
+            //mediaPlayer.seekTo(80000);
+            //mediaPlayer.seekTo(92000);
             play();
-            //mediaPlayer.seekTo(90000);
+
         }
     };
 
@@ -158,6 +161,14 @@ public class MusicService extends Service {
                 releaseMediaPlayer();
                 stopSelf();
             }
+        }
+    };
+
+    private MediaPlayer.OnSeekCompleteListener onSeekCompleteListener = new MediaPlayer.OnSeekCompleteListener() {
+        @Override
+        public void onSeekComplete(MediaPlayer mp) {
+            Log.v(TAG, "onseekcomplete");
+            //play();
         }
     };
 

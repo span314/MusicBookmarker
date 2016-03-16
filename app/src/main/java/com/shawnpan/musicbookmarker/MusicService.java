@@ -24,7 +24,7 @@ public class MusicService extends Service {
     public static final String ACTION_PLAY_PAUSE = "com.shawnpan.musicbookmarker.action.PLAY_PAUSE";
 
     //Media player
-    private MediaPlayerWithLeader mediaPlayer;
+    private AudioPlayer mediaPlayer;
 
     //State of playback
     private enum MediaState {
@@ -80,13 +80,7 @@ public class MusicService extends Service {
     private void playMusic(Uri uri) {
         Log.v(TAG, "Playing " + uri);
         initializeMediaPlayer();
-        try {
-            mediaPlayer.setDataSource(getApplicationContext(), uri);
-        } catch (IOException ie) {
-            Log.e(TAG, "Failed to load music from Uri");
-            return;
-        }
-        mediaPlayer.prepareAsync();
+        mediaPlayer.playUri(getApplicationContext(), uri);
     }
 
     private void togglePlayPause() {
@@ -109,14 +103,11 @@ public class MusicService extends Service {
 
     private void initializeMediaPlayer() {
         if (mediaPlayer == null) {
-            mediaPlayer = new MediaPlayerWithLeader();
-            mediaPlayer.setWakeMode(getApplicationContext(), PowerManager.PARTIAL_WAKE_LOCK);
-            mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-            mediaPlayer.setVolume(1.0F, 1.0F);
-            mediaPlayer.setOnPreparedListener(onPreparedListener);
-            mediaPlayer.setOnCompletionListener(onCompletionListener);
-            mediaPlayer.setOnErrorListener(onErrorListener);
-            mediaPlayer.setOnSeekCompleteListener(onSeekCompleteListener);
+            MediaPlayerAudioPlayer internalPlayer = new MediaPlayerAudioPlayer();
+            internalPlayer.setOnPreparedListener(onPreparedListener);
+            internalPlayer.setOnCompletionListener(onCompletionListener);
+            internalPlayer.setOnErrorListener(onErrorListener);
+            mediaPlayer = new AudioPlayerWithLeader(internalPlayer);
         } else {
             mediaPlayer.reset();
             mediaState = MediaState.STOPPED;
@@ -161,14 +152,6 @@ public class MusicService extends Service {
                 releaseMediaPlayer();
                 stopSelf();
             }
-        }
-    };
-
-    private MediaPlayer.OnSeekCompleteListener onSeekCompleteListener = new MediaPlayer.OnSeekCompleteListener() {
-        @Override
-        public void onSeekComplete(MediaPlayer mp) {
-            Log.v(TAG, "onseekcomplete");
-            //play();
         }
     };
 

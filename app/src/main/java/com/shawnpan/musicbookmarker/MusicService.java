@@ -2,15 +2,10 @@ package com.shawnpan.musicbookmarker;
 
 import android.app.Service;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
-import android.os.PowerManager;
 import android.util.Log;
-
-import java.io.IOException;
 
 /**
  * Service for playing music
@@ -24,15 +19,7 @@ public class MusicService extends Service {
     public static final String ACTION_PLAY_PAUSE = "com.shawnpan.musicbookmarker.action.PLAY_PAUSE";
 
     //Media player
-    private AudioPlayer mediaPlayer;
-
-    //State of playback
-    private enum MediaState {
-        STOPPED,
-        PLAYING,
-        PAUSED
-    }
-    private MediaState mediaState = MediaState.STOPPED;
+    private AudioPlayerWithLeader audioPlayer;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -80,120 +67,87 @@ public class MusicService extends Service {
     private void playMusic(Uri uri) {
         Log.v(TAG, "Playing " + uri);
         initializeMediaPlayer();
-        mediaPlayer.playUri(getApplicationContext(), uri);
+        audioPlayer.playUri(getApplicationContext(), uri);
     }
 
     private void togglePlayPause() {
-        if (mediaState == MediaState.PLAYING) {
-            pause();
-        } else if (mediaState == MediaState.PAUSED) {
-            play();
-        }
-    }
-
-    private void pause() {
-        mediaPlayer.pause();
-        mediaState = MediaState.PAUSED;
-    }
-
-    private void play() {
-        mediaPlayer.start();
-        mediaState = MediaState.PLAYING;
+        audioPlayer.togglePlayPause();
     }
 
     private void initializeMediaPlayer() {
-        if (mediaPlayer == null) {
-            MediaPlayerAudioPlayer internalPlayer = new MediaPlayerAudioPlayer();
-            internalPlayer.setOnPreparedListener(onPreparedListener);
-            internalPlayer.setOnCompletionListener(onCompletionListener);
-            internalPlayer.setOnErrorListener(onErrorListener);
-            mediaPlayer = new AudioPlayerWithLeader(internalPlayer);
+        if (audioPlayer == null) {
+            //AudioPlayer internalPlayer = new MediaPlayerAudioPlayer();
+            AudioPlayer internalPlayer = new ExoPlayerAudioPlayer();
+            audioPlayer = new AudioPlayerWithLeader(internalPlayer);
+            audioPlayer.setOnDoneListener(onDoneListener);
         } else {
-            mediaPlayer.reset();
-            mediaState = MediaState.STOPPED;
+            audioPlayer.reset();
         }
     }
 
     private void releaseMediaPlayer() {
-        if (mediaPlayer != null) {
-            mediaPlayer.reset();
-            mediaPlayer.release();
-            mediaPlayer = null;
-            mediaState = MediaState.STOPPED;
+        if (audioPlayer != null) {
+            audioPlayer.reset();
+            audioPlayer.release();
+            audioPlayer = null;
         }
     }
 
+    private boolean isStopped() {
+        return audioPlayer == null || !audioPlayer.isReady();
+    }
+
     //Listeners
-    private MediaPlayer.OnPreparedListener onPreparedListener = new MediaPlayer.OnPreparedListener() {
+    private AudioPlayer.OnDoneListener onDoneListener = new AudioPlayer.OnDoneListener() {
         @Override
-        public void onPrepared(MediaPlayer mp) {
-            Log.v(TAG, "onprepared");
-            //mediaPlayer.seekTo(80000);
-            //mediaPlayer.seekTo(92000);
-            play();
-
-        }
-    };
-
-    private MediaPlayer.OnErrorListener onErrorListener = new MediaPlayer.OnErrorListener() {
-        @Override
-        public boolean onError(MediaPlayer mp, int what, int extra) {
-            Log.v(TAG, "Error");
-            releaseMediaPlayer();
-            return true;
-        }
-    };
-
-    private MediaPlayer.OnCompletionListener onCompletionListener = new MediaPlayer.OnCompletionListener() {
-        @Override
-        public void onCompletion(MediaPlayer mp) {
-            Log.v(TAG, "Complete - Looping is " + mediaPlayer.isLooping());
-            if (!mediaPlayer.isLooping()) {
-                releaseMediaPlayer();
-                stopSelf();
+        public void onDone(String error) {
+            if (error == null) {
+                Log.v(TAG, "Playback complete");
+            } else {
+                Log.e(TAG, error);
             }
+            releaseMediaPlayer();
+            stopSelf();
         }
     };
 
     //Public API exposed to bound service
     public int getCurrentTime() {
-        if (mediaState == MediaState.STOPPED) {
+        if (isStopped()) {
             return 0;
         }
-        return mediaPlayer.getCurrentPosition();
+        return audioPlayer.getCurrentPosition();
     }
 
     public int getDuration() {
-        if (mediaState == MediaState.STOPPED) {
+        if (isStopped()) {
             return 0;
         }
-        return mediaPlayer.getDuration();
+        return audioPlayer.getDuration();
     }
 
     public void seekTo(int time) {
-        if (mediaState == MediaState.STOPPED) {
+        if (isStopped()) {
             return;
         }
-        mediaPlayer.seekTo(time);
+        audioPlayer.seekTo(time);
     }
 
     public boolean isRepeat() {
-        if (mediaState == MediaState.STOPPED) {
+        if (isStopped()) {
             return false;
         }
-        return mediaPlayer.isLooping();
-
+        return audioPlayer.isLooping();
     }
 
     public void setRepeat(boolean repeat) {
-        Log.v(TAG, "set repeat " + String.valueOf(repeat));
-        if (mediaState == MediaState.STOPPED) {
+        if (isStopped()) {
             return;
         }
-        mediaPlayer.setLooping(repeat);
+        audioPlayer.setLooping(repeat);
     }
 
     public boolean isPlaying() {
-        return mediaState == MediaState.PLAYING;
+        return audioPlayer != null && audioPlayer.isPlaying();
     }
 }

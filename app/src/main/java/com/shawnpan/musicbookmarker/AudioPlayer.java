@@ -8,10 +8,8 @@ import android.net.Uri;
  */
 public interface AudioPlayer {
 
-    enum State {
-        PLAYING,
-        PAUSED,
-        STOPPED
+    interface OnDoneListener {
+        void onDone(String error);
     }
 
     void start();
@@ -19,6 +17,8 @@ public interface AudioPlayer {
     void stop();
 
     void pause();
+
+    void togglePlayPause();
 
     void reset();
 
@@ -32,9 +32,13 @@ public interface AudioPlayer {
 
     boolean isPlaying();
 
+    boolean isReady();
+
     boolean isLooping();
 
     void setLooping(boolean looping);
 
     void playUri(Context context, Uri uri);
+
+    void setOnDoneListener(OnDoneListener onDoneListener);
 }

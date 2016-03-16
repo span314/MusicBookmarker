@@ -79,6 +79,18 @@ public class AudioPlayerWithLeader implements AudioPlayer {
     }
 
     @Override
+    public void togglePlayPause() {
+        //TODO test
+        if (countDownState == CountDownState.INACTIVE) {
+            player.togglePlayPause();
+        } else if (countDownState == CountDownState.PAUSED) {
+            startCountdown();
+        } else {
+            stopCountdown();
+        }
+    }
+
+    @Override
     public void reset() {
         stopCountdown();
         player.reset();
@@ -141,6 +153,11 @@ public class AudioPlayerWithLeader implements AudioPlayer {
     }
 
     @Override
+    public boolean isReady() {
+        return player.isReady();
+    }
+
+    @Override
     public boolean isLooping() {
         return player.isLooping();
     }
@@ -153,5 +170,10 @@ public class AudioPlayerWithLeader implements AudioPlayer {
     @Override
     public void playUri(Context context, Uri uri) {
         player.playUri(context, uri);
+    }
+
+    @Override
+    public void setOnDoneListener(OnDoneListener onDoneListener) {
+        player.setOnDoneListener(onDoneListener);
     }
 }

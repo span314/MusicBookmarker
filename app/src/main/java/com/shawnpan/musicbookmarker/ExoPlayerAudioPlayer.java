@@ -34,16 +34,14 @@ public class ExoPlayerAudioPlayer implements AudioPlayer {
     private OnDoneListener onDoneListener;
     private volatile boolean looping = false;
 
-    @Override
-    public void start() {
-        exoPlayer.setPlayWhenReady(true);
+    public ExoPlayerAudioPlayer() {
+        exoPlayer = ExoPlayer.Factory.newInstance(TRACK_COUNT);
+        exoPlayer.addListener(playerListener);
     }
 
     @Override
-    public void stop() {
-        //TODO
-        pause();
-        release();
+    public void start() {
+        exoPlayer.setPlayWhenReady(true);
     }
 
     @Override
@@ -62,14 +60,15 @@ public class ExoPlayerAudioPlayer implements AudioPlayer {
 
     @Override
     public void reset() {
-        //TODO
-        Log.v(TAG, "TODO reset");
+        exoPlayer.stop();
+        exoPlayer.seekTo(0);
     }
 
     @Override
     public void release() {
         if (exoPlayer != null) {
             exoPlayer.release();
+            exoPlayer = null;
         }
     }
 
@@ -90,13 +89,12 @@ public class ExoPlayerAudioPlayer implements AudioPlayer {
 
     @Override
     public boolean isPlaying() {
-        return isReady() && exoPlayer.getPlayWhenReady();
+        return exoPlayer.getPlaybackState() == ExoPlayer.STATE_READY && exoPlayer.getPlayWhenReady();
     }
 
     @Override
     public boolean isReady() {
-        //TODO or buffering?
-        return exoPlayer.getPlaybackState() == ExoPlayer.STATE_READY;
+        return exoPlayer.getPlaybackState() == ExoPlayer.STATE_READY || exoPlayer.getPlaybackState() == ExoPlayer.STATE_BUFFERING;
     }
 
     @Override
@@ -111,12 +109,9 @@ public class ExoPlayerAudioPlayer implements AudioPlayer {
 
     @Override
     public void playUri(Context context, Uri uri) {
-        Log.v(TAG, "ExoPlay");
-        release();
-        exoPlayer = ExoPlayer.Factory.newInstance(TRACK_COUNT);
-        exoPlayer.addListener(playerListener);
+        Log.v(TAG, "Playing Uri " + uri);
         Allocator allocator = new DefaultAllocator(BUFFER_SEGMENT_SIZE);
-        DataSource dataSource = new DefaultUriDataSource(context, "TODO"); //TODO fix
+        DataSource dataSource = new DefaultUriDataSource(context, TAG);
         ExtractorSampleSource sampleSource = new ExtractorSampleSource(uri, dataSource, allocator, BUFFER_SEGMENT_SIZE * BUFFER_SEGMENT_COUNT);
         Handler handler = null;
         DrmSessionManager drmSessionManager = null;
@@ -179,7 +174,6 @@ public class ExoPlayerAudioPlayer implements AudioPlayer {
                 if (looping) {
                     seekTo(0);
                 } else {
-                    release();
                     if (onDoneListener != null) {
                         onDoneListener.onDone(null);
                     }

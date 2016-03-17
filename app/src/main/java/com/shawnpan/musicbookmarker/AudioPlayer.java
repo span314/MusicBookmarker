@@ -14,8 +14,6 @@ public interface AudioPlayer {
 
     void start();
 
-    void stop();
-
     void pause();
 
     void togglePlayPause();

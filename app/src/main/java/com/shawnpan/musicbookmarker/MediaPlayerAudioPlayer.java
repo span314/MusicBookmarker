@@ -99,12 +99,6 @@ public class MediaPlayerAudioPlayer implements AudioPlayer {
     }
 
     @Override
-    public void stop() {
-        ready = false;
-        mediaPlayer.stop();
-    }
-
-    @Override
     public void start() {
         mediaPlayer.start();
     }

@@ -67,12 +67,6 @@ public class AudioPlayerWithLeader implements AudioPlayer {
     }
 
     @Override
-    public void stop() {
-        stopCountdown();
-        player.stop();
-    }
-
-    @Override
     public void pause() {
         stopCountdown();
         player.pause();

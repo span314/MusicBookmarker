@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.database.Cursor;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -15,6 +16,7 @@ import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
@@ -77,9 +79,17 @@ public class MusicPlayerActivity extends ActionBarActivity {
             public Cursor runQuery(CharSequence constraint) {
                 Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
                 String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
-                String where = MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?";
-                String likePattern = constraint + "%";
-                String[] args = new String[] {likePattern, likePattern};
+                String where;
+                String[] args;
+                if (constraint.length() == 0) {
+                    where = MediaStore.Audio.Media._ID + " in (763, 2035, 2051, 2036)";
+                    args = null;
+                } else {
+                    where = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
+                    String likePattern = constraint + "%";
+                    args = new String[]{likePattern, likePattern};
+                }
+
                 String orderBy = "title ASC LIMIT 20";
                 return getContentResolver().query(uri, select, where, args, orderBy);
             }
@@ -93,7 +103,6 @@ public class MusicPlayerActivity extends ActionBarActivity {
         });
 
         selectMusic.setAdapter(selectMusicAdaptor);
-        selectMusic.setThreshold(2);
 
         bindListeners();
     }
@@ -166,21 +175,28 @@ public class MusicPlayerActivity extends ActionBarActivity {
                 Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
                 Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
                 startService(intent);
-                playPauseButton.requestFocus();
+                hideKeyboard();
             }
         });
+    }
 
-        selectMusic.setOnFocusChangeListener(new View.OnFocusChangeListener() {
-            @Override
-            public void onFocusChange(View v, boolean hasFocus) {
-                if (hasFocus) {
-                    selectMusic.setText("");
-                } else {
-                    InputMethodManager mgr = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                    mgr.hideSoftInputFromWindow(selectMusic.getWindowToken(), 0);
-                }
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        //Clear keyboard if touch outside music selector
+        if (event.getAction() == MotionEvent.ACTION_DOWN && getCurrentFocus() == selectMusic) {
+            Rect outRect = new Rect();
+            selectMusic.getGlobalVisibleRect(outRect);
+            if (!outRect.contains((int) event.getRawX(), (int) event.getRawY())) {
+                hideKeyboard();
             }
-        });
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    private void hideKeyboard() {
+        selectMusic.clearFocus();
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(selectMusic.getWindowToken(), 0);
     }
 
     @Override

@@ -71,7 +71,9 @@ public class MusicService extends Service {
     }
 
     private void togglePlayPause() {
-        audioPlayer.togglePlayPause();
+        if (!isStopped()) {
+            audioPlayer.togglePlayPause();
+        }
     }
 
     private void initializeMediaPlayer() {

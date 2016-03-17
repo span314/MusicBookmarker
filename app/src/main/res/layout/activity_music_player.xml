@@ -9,11 +9,14 @@
     android:paddingRight="@dimen/activity_horizontal_margin"
     android:paddingTop="@dimen/activity_vertical_margin"
     android:orientation="vertical"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
     tools:context="com.shawnpan.musicbookmarker.MusicPlayerActivity">
 
-    <AutoCompleteTextView
+    <com.shawnpan.musicbookmarker.AutoClearAutoCompleteTextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:singleLine="true"
         android:id="@+id/select_music"/>
 
     <com.shawnpan.musicbookmarker.MusicSeekBar
@@ -58,9 +61,7 @@
             android:background="@color/primary_material_dark"
             android:paddingBottom="8dp"
             android:paddingTop="8dp"
-            android:layout_margin="2dp"
-            android:focusable="true"
-            android:focusableInTouchMode="true" />
+            android:layout_margin="2dp"/>
 
         <ImageButton
             android:id="@+id/next_button"

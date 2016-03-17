@@ -11,12 +11,10 @@
     android:orientation="vertical"
     tools:context="com.shawnpan.musicbookmarker.MusicPlayerActivity">
 
-    <Button
+    <AutoCompleteTextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Start Program"
-        android:onClick="tempSelectMusic"
-        android:id="@+id/temp_start"/>
+        android:id="@+id/select_music"/>
 
     <com.shawnpan.musicbookmarker.MusicSeekBar
         android:layout_width="match_parent"
@@ -60,7 +58,9 @@
             android:background="@color/primary_material_dark"
             android:paddingBottom="8dp"
             android:paddingTop="8dp"
-            android:layout_margin="2dp"/>
+            android:layout_margin="2dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
 
         <ImageButton
             android:id="@+id/next_button"

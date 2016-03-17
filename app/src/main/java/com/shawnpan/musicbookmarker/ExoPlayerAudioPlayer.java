@@ -109,7 +109,6 @@ public class ExoPlayerAudioPlayer implements AudioPlayer {
 
     @Override
     public void playUri(Context context, Uri uri) {
-        Log.v(TAG, "Playing Uri " + uri);
         Allocator allocator = new DefaultAllocator(BUFFER_SEGMENT_SIZE);
         DataSource dataSource = new DefaultUriDataSource(context, TAG);
         ExtractorSampleSource sampleSource = new ExtractorSampleSource(uri, dataSource, allocator, BUFFER_SEGMENT_SIZE * BUFFER_SEGMENT_COUNT);

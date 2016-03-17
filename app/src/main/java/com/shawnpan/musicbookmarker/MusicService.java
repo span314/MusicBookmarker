@@ -19,7 +19,7 @@ public class MusicService extends Service {
     public static final String ACTION_PLAY_PAUSE = "com.shawnpan.musicbookmarker.action.PLAY_PAUSE";
 
     //Media player
-    private AudioPlayerWithLeader audioPlayer;
+    private AudioPlayer audioPlayer;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {

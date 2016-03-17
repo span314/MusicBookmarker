@@ -16,12 +16,19 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.AdapterView;
+import android.widget.AutoCompleteTextView;
+import android.widget.CursorAdapter;
+import android.widget.FilterQueryProvider;
 import android.widget.ImageButton;
+import android.widget.SimpleCursorAdapter;
 
 public class MusicPlayerActivity extends ActionBarActivity {
     private static final String TAG = "MusicPlayerActivity";
 
     private MusicSeekBar musicSeekBar;
+    private AutoCompleteTextView selectMusic;
     private ImageButton resetButton;
     private ImageButton previousButton;
     private ImageButton playPauseButton;
@@ -54,32 +61,49 @@ public class MusicPlayerActivity extends ActionBarActivity {
 
         //load views
         musicSeekBar = (MusicSeekBar) findViewById(R.id.seek_bar);
+        selectMusic = (AutoCompleteTextView) findViewById(R.id.select_music);
         resetButton = (ImageButton) findViewById(R.id.reset_button);
         previousButton = (ImageButton) findViewById(R.id.previous_button);
         playPauseButton = (ImageButton) findViewById(R.id.play_pause_button);
         nextButton = (ImageButton) findViewById(R.id.next_button);
         playModeButton = (ImageButton) findViewById(R.id.play_mode_button);
 
+        //setup dropdown
+        String[] fromColumns = new String[] {MediaStore.Audio.Media.TITLE};
+        int[] toViews = new int[] {android.R.id.text1};
+        SimpleCursorAdapter selectMusicAdaptor = new SimpleCursorAdapter(MusicPlayerActivity.this, android.R.layout.select_dialog_item, null, fromColumns, toViews, 0);
+        selectMusicAdaptor.setFilterQueryProvider(new FilterQueryProvider() {
+            @Override
+            public Cursor runQuery(CharSequence constraint) {
+                Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
+                String where = MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?";
+                String likePattern = constraint + "%";
+                String[] args = new String[] {likePattern, likePattern};
+                String orderBy = "title ASC LIMIT 20";
+                return getContentResolver().query(uri, select, where, args, orderBy);
+            }
+        });
+        selectMusicAdaptor.setCursorToStringConverter(new SimpleCursorAdapter.CursorToStringConverter() {
+            @Override
+            public CharSequence convertToString(Cursor cursor) {
+                String title = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.TITLE));
+                return title;
+            }
+        });
+
+        selectMusic.setAdapter(selectMusicAdaptor);
+        selectMusic.setThreshold(2);
+
         bindListeners();
     }
 
-    //TODO Temporary until we implement music selection
-    public void tempSelectMusic(View view) {
-        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
-        String where = MediaStore.Audio.Media.TITLE + " like ?";
-        //String[] args = new String[]{"%rack%"};
-        String[] args = new String[]{"%tarlight%"};
-        String orderBy = MediaStore.Audio.Media.TITLE + " ASC";
-
-        Cursor cursor = getContentResolver().query(uri, select, where, args, orderBy);
-        cursor.moveToFirst();
-        long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
-        cursor.close();
-
-        Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
-        Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
-        startService(intent);
+    @Override
+    protected void onDestroy() {
+        //Close cursor on adapter
+        CursorAdapter adapter = (CursorAdapter) selectMusic.getAdapter();
+        adapter.changeCursor(null);
+        super.onDestroy();
     }
 
     private void bindListeners() {
@@ -133,6 +157,30 @@ public class MusicPlayerActivity extends ActionBarActivity {
                 }
             }
         });
+
+        selectMusic.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Cursor cursor = (Cursor) parent.getItemAtPosition(position);
+                long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
+                Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
+                Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
+                startService(intent);
+                playPauseButton.requestFocus();
+            }
+        });
+
+        selectMusic.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (hasFocus) {
+                    selectMusic.setText("");
+                } else {
+                    InputMethodManager mgr = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    mgr.hideSoftInputFromWindow(selectMusic.getWindowToken(), 0);
+                }
+            }
+        });
     }
 
     @Override
@@ -174,7 +222,6 @@ public class MusicPlayerActivity extends ActionBarActivity {
             progressUpdateHandler.removeCallbacks(progressUpdateRunnable);
             int currentTime = musicService.getCurrentTime();
             int duration = musicService.getDuration();
-            //Log.v(TAG, "C " + currentTime + " D " + duration + " R " + musicService.isRepeat());
             musicSeekBar.updateTime(currentTime, duration);
             progressUpdateHandler.postDelayed(progressUpdateRunnable, 500);
         }

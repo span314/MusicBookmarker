@@ -7,37 +7,37 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.database.Cursor;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.provider.MediaStore;
+import android.provider.SearchRecentSuggestions;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
-import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
-import android.widget.AutoCompleteTextView;
 import android.widget.CursorAdapter;
 import android.widget.FilterQueryProvider;
 import android.widget.ImageButton;
+import android.widget.ListView;
 import android.widget.SearchView;
 import android.widget.SimpleCursorAdapter;
 
 public class MusicPlayerActivity extends ActionBarActivity {
     private static final String TAG = "MusicPlayerActivity";
 
+    private ListView musicList;
     private MusicSeekBar musicSeekBar;
-    private AutoCompleteTextView selectMusic;
     private ImageButton resetButton;
     private ImageButton previousButton;
     private ImageButton playPauseButton;
     private ImageButton nextButton;
     private ImageButton playModeButton;
+
+    private SearchRecentSuggestions musicSuggestions;
 
     private MusicService musicService;
     private boolean musicServiceBound = false;
@@ -64,18 +64,18 @@ public class MusicPlayerActivity extends ActionBarActivity {
         setContentView(R.layout.activity_music_player);
 
         //load views
+        musicList = (ListView) findViewById(R.id.music_list);
         musicSeekBar = (MusicSeekBar) findViewById(R.id.seek_bar);
-        selectMusic = (AutoCompleteTextView) findViewById(R.id.select_music);
         resetButton = (ImageButton) findViewById(R.id.reset_button);
         previousButton = (ImageButton) findViewById(R.id.previous_button);
         playPauseButton = (ImageButton) findViewById(R.id.play_pause_button);
         nextButton = (ImageButton) findViewById(R.id.next_button);
         playModeButton = (ImageButton) findViewById(R.id.play_mode_button);
 
-        //setup dropdown
+        //setup list
         String[] fromColumns = new String[] {MediaStore.Audio.Media.TITLE};
         int[] toViews = new int[] {android.R.id.text1};
-        SimpleCursorAdapter selectMusicAdaptor = new SimpleCursorAdapter(MusicPlayerActivity.this, android.R.layout.select_dialog_item, null, fromColumns, toViews, 0);
+        SimpleCursorAdapter selectMusicAdaptor = new SimpleCursorAdapter(MusicPlayerActivity.this, android.R.layout.simple_list_item_1, null, fromColumns, toViews, 0);
         selectMusicAdaptor.setFilterQueryProvider(new FilterQueryProvider() {
             @Override
             public Cursor runQuery(CharSequence constraint) {
@@ -89,13 +89,11 @@ public class MusicPlayerActivity extends ActionBarActivity {
                 return title;
             }
         });
-
-        selectMusic.setAdapter(selectMusicAdaptor);
+        musicList.setAdapter(selectMusicAdaptor);
 
         bindListeners();
 
-        //TODO remove?
-        //handleIntent(getIntent());
+        musicSuggestions = new SearchRecentSuggestions(this, SearchRecentMusicProvider.AUTHORITY, SearchRecentMusicProvider.MODE);
     }
 
 
@@ -110,13 +108,9 @@ public class MusicPlayerActivity extends ActionBarActivity {
         if (intent != null && Intent.ACTION_SEARCH.equals(intent.getAction())) {
             String query = intent.getStringExtra(SearchManager.QUERY);
             Log.v(TAG, "query: " + query);
-            //use the query to search your data somehow
-            Cursor cursor = searchMusic(query);
-            if (cursor.moveToFirst()) {
-                long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
-                Log.v(TAG, "music id " + musicId);
-            }
-            cursor.close();
+            changeCursor(searchMusic(query));
+            //TODO clear history
+            musicSuggestions.saveRecentQuery(query, null);
         }
     }
 
@@ -126,6 +120,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
         String where;
         String[] args;
         if (constraint.length() == 0) {
+            //TODO fix
             where = MediaStore.Audio.Media._ID + " in (763, 2035, 2051, 2036)";
             args = null;
         } else {
@@ -140,10 +135,13 @@ public class MusicPlayerActivity extends ActionBarActivity {
 
     @Override
     protected void onDestroy() {
-        //Close cursor on adapter
-        CursorAdapter adapter = (CursorAdapter) selectMusic.getAdapter();
-        adapter.changeCursor(null);
+        changeCursor(null); //Close cursor on adapter
         super.onDestroy();
+    }
+
+    private void changeCursor(Cursor cursor) {
+        CursorAdapter adapter = (CursorAdapter) musicList.getAdapter();
+        adapter.changeCursor(cursor);
     }
 
     private void bindListeners() {
@@ -198,37 +196,27 @@ public class MusicPlayerActivity extends ActionBarActivity {
             }
         });
 
-        selectMusic.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+        musicList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Cursor cursor = (Cursor) parent.getItemAtPosition(position);
                 long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
+                String musicTitle = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.TITLE));
                 Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
                 Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
                 startService(intent);
-                hideKeyboard();
+                musicSuggestions.saveRecentQuery(musicTitle, null);
+//                hideKeyboard();
             }
         });
     }
 
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        //Clear keyboard if touch outside music selector
-        if (event.getAction() == MotionEvent.ACTION_DOWN && getCurrentFocus() == selectMusic) {
-            Rect outRect = new Rect();
-            selectMusic.getGlobalVisibleRect(outRect);
-            if (!outRect.contains((int) event.getRawX(), (int) event.getRawY())) {
-                hideKeyboard();
-            }
-        }
-        return super.dispatchTouchEvent(event);
-    }
-
-    private void hideKeyboard() {
-        selectMusic.clearFocus();
-        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.hideSoftInputFromWindow(selectMusic.getWindowToken(), 0);
-    }
+    //TODO?
+//    private void hideKeyboard() {
+//        selectMusic.clearFocus();
+//        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+//        imm.hideSoftInputFromWindow(selectMusic.getWindowToken(), 0);
+//    }
 
     @Override
     protected void onStart() {
@@ -295,6 +283,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
         SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
         SearchView searchView = (SearchView) menu.findItem(R.id.search).getActionView();
         searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
+        //TODO remove?
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {

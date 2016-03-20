@@ -31,6 +31,10 @@
                 android:resource="@xml/searchable"/>
         </activity>
 
+        <provider
+            android:name=".SearchRecentMusicProvider"
+            android:authorities="com.shawnpan.musicbookmarker.SearchRecentMusicProvider" />
+
         <service android:exported="false" android:name=".MusicService">
             <intent-filter>
                 <action android:name="com.shawnpan.musicbookmarker.action.PLAY" />

@@ -117,18 +117,9 @@ public class MusicPlayerActivity extends ActionBarActivity {
     private Cursor searchMusic(CharSequence constraint) {
         Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
         String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
-        String where;
-        String[] args;
-        if (constraint.length() == 0) {
-            //TODO fix
-            where = MediaStore.Audio.Media._ID + " in (763, 2035, 2051, 2036)";
-            args = null;
-        } else {
-            where = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
-            String likePattern = constraint + "%";
-            args = new String[]{likePattern, likePattern};
-        }
-
+        String where = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
+        String likePattern = constraint + "%";
+        String[] args = new String[]{likePattern, likePattern};
         String orderBy = "title ASC LIMIT 20";
         return getContentResolver().query(uri, select, where, args, orderBy);
     }

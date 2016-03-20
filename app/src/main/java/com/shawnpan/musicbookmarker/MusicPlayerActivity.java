@@ -12,7 +12,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.provider.MediaStore;
-import android.provider.SearchRecentSuggestions;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.Menu;
@@ -25,6 +24,7 @@ import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.SearchView;
 import android.widget.SimpleCursorAdapter;
+import com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider;
 
 public class MusicPlayerActivity extends ActionBarActivity {
     private static final String TAG = "MusicPlayerActivity";
@@ -36,8 +36,6 @@ public class MusicPlayerActivity extends ActionBarActivity {
     private ImageButton playPauseButton;
     private ImageButton nextButton;
     private ImageButton playModeButton;
-
-    private SearchRecentSuggestions musicSuggestions;
 
     private MusicService musicService;
     private boolean musicServiceBound = false;
@@ -92,8 +90,6 @@ public class MusicPlayerActivity extends ActionBarActivity {
         musicList.setAdapter(selectMusicAdaptor);
 
         bindListeners();
-
-        musicSuggestions = new SearchRecentSuggestions(this, SearchRecentMusicProvider.AUTHORITY, SearchRecentMusicProvider.MODE);
     }
 
 
@@ -110,7 +106,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
             Log.v(TAG, "query: " + query);
             changeCursor(searchMusic(query));
             //TODO clear history
-            musicSuggestions.saveRecentQuery(query, null);
+            MusicSuggestionsProvider.saveRecentQuery(this, query, "Line 2");
         }
     }
 
@@ -196,7 +192,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
                 Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
                 Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
                 startService(intent);
-                musicSuggestions.saveRecentQuery(musicTitle, null);
+                MusicSuggestionsProvider.saveRecentQuery(MusicPlayerActivity.this, musicTitle, "Line 2");
 //                hideKeyboard();
             }
         });
@@ -274,22 +270,6 @@ public class MusicPlayerActivity extends ActionBarActivity {
         SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
         SearchView searchView = (SearchView) menu.findItem(R.id.search).getActionView();
         searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
-        //TODO remove?
-        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
-            @Override
-            public boolean onQueryTextSubmit(String query) {
-                Log.v(TAG, "Query Submit");
-
-                return false;
-            }
-
-            @Override
-            public boolean onQueryTextChange(String newText) {
-                Log.v(TAG, "Query Text Change");
-
-                return false;
-            }
-        });
 
         return true;
     }

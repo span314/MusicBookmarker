@@ -1,4 +1,4 @@
-package com.shawnpan.musicbookmarker;
+package com.shawnpan.musicbookmarker.audioplayer;
 
 import android.content.Context;
 import android.net.Uri;

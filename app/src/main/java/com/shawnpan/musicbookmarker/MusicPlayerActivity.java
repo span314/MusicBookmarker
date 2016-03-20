@@ -1,5 +1,6 @@
 package com.shawnpan.musicbookmarker;
 
+import android.app.SearchManager;
 import android.content.ComponentName;
 import android.content.ContentUris;
 import android.content.Context;
@@ -24,6 +25,7 @@ import android.widget.AutoCompleteTextView;
 import android.widget.CursorAdapter;
 import android.widget.FilterQueryProvider;
 import android.widget.ImageButton;
+import android.widget.SearchView;
 import android.widget.SimpleCursorAdapter;
 
 public class MusicPlayerActivity extends ActionBarActivity {
@@ -77,21 +79,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
         selectMusicAdaptor.setFilterQueryProvider(new FilterQueryProvider() {
             @Override
             public Cursor runQuery(CharSequence constraint) {
-                Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-                String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
-                String where;
-                String[] args;
-                if (constraint.length() == 0) {
-                    where = MediaStore.Audio.Media._ID + " in (763, 2035, 2051, 2036)";
-                    args = null;
-                } else {
-                    where = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
-                    String likePattern = constraint + "%";
-                    args = new String[]{likePattern, likePattern};
-                }
-
-                String orderBy = "title ASC LIMIT 20";
-                return getContentResolver().query(uri, select, where, args, orderBy);
+                return searchMusic(constraint);
             }
         });
         selectMusicAdaptor.setCursorToStringConverter(new SimpleCursorAdapter.CursorToStringConverter() {
@@ -105,6 +93,49 @@ public class MusicPlayerActivity extends ActionBarActivity {
         selectMusic.setAdapter(selectMusicAdaptor);
 
         bindListeners();
+
+        //TODO remove?
+        //handleIntent(getIntent());
+    }
+
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        Log.v(TAG, "onNewIntent");
+        handleIntent(intent);
+    }
+
+    private void handleIntent(Intent intent) {
+        Log.v(TAG, "handle intent");
+        if (intent != null && Intent.ACTION_SEARCH.equals(intent.getAction())) {
+            String query = intent.getStringExtra(SearchManager.QUERY);
+            Log.v(TAG, "query: " + query);
+            //use the query to search your data somehow
+            Cursor cursor = searchMusic(query);
+            if (cursor.moveToFirst()) {
+                long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
+                Log.v(TAG, "music id " + musicId);
+            }
+            cursor.close();
+        }
+    }
+
+    private Cursor searchMusic(CharSequence constraint) {
+        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+        String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
+        String where;
+        String[] args;
+        if (constraint.length() == 0) {
+            where = MediaStore.Audio.Media._ID + " in (763, 2035, 2051, 2036)";
+            args = null;
+        } else {
+            where = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
+            String likePattern = constraint + "%";
+            args = new String[]{likePattern, likePattern};
+        }
+
+        String orderBy = "title ASC LIMIT 20";
+        return getContentResolver().query(uri, select, where, args, orderBy);
     }
 
     @Override
@@ -259,6 +290,27 @@ public class MusicPlayerActivity extends ActionBarActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_music_player, menu);
+
+        // Associate searchable configuration with the SearchView
+        SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
+        SearchView searchView = (SearchView) menu.findItem(R.id.search).getActionView();
+        searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                Log.v(TAG, "Query Submit");
+
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                Log.v(TAG, "Query Text Change");
+
+                return false;
+            }
+        });
+
         return true;
     }
 

@@ -7,12 +7,17 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.UriMatcher;
 import android.database.Cursor;
+import android.database.MergeCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
 import android.provider.BaseColumns;
+import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Log;
+
+import com.shawnpan.musicbookmarker.R;
+
 /**
  * Content provider for search suggestions.
  */
@@ -22,20 +27,37 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String AUTHORITY = "com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider";
     private static final String DB_NAME = "musicbookmarkerdb";
     public static final String TABLE_SUGGESTIONS = "suggestions";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 6;
 
-    public static final Uri URI_SUGGESTIONS = Uri.parse("content://" + AUTHORITY + "/" + TABLE_SUGGESTIONS);
+    private static final String DRAWABLE_PREFIX = "'" + ContentResolver.SCHEME_ANDROID_RESOURCE + "://com.shawnpan.musicbookmarker/";
+    private static final String DRAWABLE_SUFFIX = "'";
+    private static final String DRAWABLE_ACCESS_TIME = DRAWABLE_PREFIX + R.drawable.ic_access_time_white_48dp + DRAWABLE_SUFFIX;
+    private static final String DRAWABLE_ALBUM = DRAWABLE_PREFIX + R.drawable.ic_album_white_48dp + DRAWABLE_SUFFIX;
 
-    private static final String WHERE = Columns.TEXT1 + " LIKE ? OR " + Columns.TEXT2 + " LIKE ?";
-    private static final String[] PROJECTION = new String [] {
-            "0 AS " + SearchManager.SUGGEST_COLUMN_FORMAT,
-            "0 AS " + SearchManager.SUGGEST_COLUMN_ICON_1, //TODO Fix "'android.resource://system/" + com.android.internal.R.drawable.ic_menu_recent_history
+    private static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + TABLE_SUGGESTIONS);
+    private static final String[] SUGGESTIONS_PROJECTION = new String [] {
+            DRAWABLE_ACCESS_TIME + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1,
             Columns.TEXT1,
             Columns.TEXT2,
             Columns.QUERY,
             Columns._ID
     };
-    private static final String ORDER_BY = "date DESC";
+    private static final String SUGGESTIONS_FILTER = Columns.TEXT1 + " LIKE ? OR " + Columns.TEXT2 + " LIKE ?";
+    private static final String SUGGESTIONS_ORDER_BY = "date DESC";
+    private static final String SUGGESTIONS_LIMIT = "20";
+
+    private static final Uri SEARCH_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+    private static final String SEARCH_FILTER = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
+    private static final String[] SEARCH_PROJECTION = new String [] {
+            DRAWABLE_ALBUM + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1,
+            MediaStore.Audio.Media.TITLE + " AS " + Columns.TEXT1,
+            MediaStore.Audio.Media.ALBUM + " AS " + Columns.TEXT2,
+            MediaStore.Audio.Media.TITLE + " AS " + Columns.QUERY,
+            MediaStore.Audio.Media._ID + " AS " + Columns._ID
+    };
+    private static final String SEARCH_ORDER_BY = MediaStore.Audio.Media.TITLE + " ASC LIMIT 20";
+
+
     private static final int URI_MATCH_SUGGEST = 1;
 
     private SQLiteOpenHelper openHelper;
@@ -70,8 +92,8 @@ public class MusicSuggestionsProvider extends ContentProvider {
             String command =
                     "CREATE TABLE " + TABLE_SUGGESTIONS +
                     " (" +
-                    Columns._ID + " PRIMARY KEY, " +
-                    Columns.TEXT1 + " TEXT UNIQUE ON CONFLICT REPLACE, " +
+                    Columns._ID + " PRIMARY KEY UNIQUE ON CONFLICT REPLACE, " +
+                    Columns.TEXT1 + " TEXT, " +
                     Columns.TEXT2 + " TEXT, " +
                     Columns.QUERY + " TEXT, " +
                     Columns.DATE + " LONG" +
@@ -98,82 +120,34 @@ public class MusicSuggestionsProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         SQLiteDatabase db = openHelper.getReadableDatabase();
 
-        // special case for actual suggestions (from search manager)
-        if (uriMatcher.match(uri) == URI_MATCH_SUGGEST) {
-            String suggestSelection;
-            String[] myArgs;
-            if (TextUtils.isEmpty(selectionArgs[0])) {
-                suggestSelection = null;
-                myArgs = null;
-            } else {
-                String like = "%" + selectionArgs[0] + "%";
-                myArgs = new String [] { like, like };
-                suggestSelection = WHERE;
-            }
-            // Suggestions are always performed with the default sort order
-            Cursor c = db.query(TABLE_SUGGESTIONS, PROJECTION,
-                    suggestSelection, myArgs, null, null, ORDER_BY, null);
-            c.setNotificationUri(getContext().getContentResolver(), uri);
-            return c;
+        if (uriMatcher.match(uri) != URI_MATCH_SUGGEST) {
+            throw new IllegalArgumentException("Invalid query");
         }
 
-        // otherwise process arguments and perform a standard query
-        int length = uri.getPathSegments().size();
-        if (length != 1 && length != 2) {
-            throw new IllegalArgumentException("Unknown Uri");
+        String query = selectionArgs[0];
+
+        //Return recent results when query is empty
+        if (TextUtils.isEmpty(query)) {
+            Cursor allRecentCursor = db.query(TABLE_SUGGESTIONS, SUGGESTIONS_PROJECTION, null, null, null, null, SUGGESTIONS_ORDER_BY, SUGGESTIONS_LIMIT);
+            return allRecentCursor;
         }
 
-        String base = uri.getPathSegments().get(0);
-        if (!base.equals(TABLE_SUGGESTIONS)) {
-            throw new IllegalArgumentException("Unknown Uri");
-        }
+        String like = query + "%";
+        String[] args = new String[]{like, like};
+        Cursor recentCursor = db.query(TABLE_SUGGESTIONS, SUGGESTIONS_PROJECTION, SUGGESTIONS_FILTER, args, null, null, SUGGESTIONS_ORDER_BY, SUGGESTIONS_LIMIT);
+        recentCursor.setNotificationUri(getContext().getContentResolver(), uri);
+        Cursor searchCursor = getContext().getContentResolver().query(SEARCH_URI, SEARCH_PROJECTION, SEARCH_FILTER, args, SEARCH_ORDER_BY);
 
-        String[] useProjection = null;
-        if (projection != null && projection.length > 0) {
-            useProjection = new String[projection.length + 1];
-            System.arraycopy(projection, 0, useProjection, 0, projection.length);
-            useProjection[projection.length] = "_id AS _id";
-        }
-
-        StringBuilder whereClause = new StringBuilder(256);
-        if (length == 2) {
-            whereClause.append("(_id = ").append(uri.getPathSegments().get(1)).append(")");
-        }
-
-        // Tack on the user's selection, if present
-        if (selection != null && selection.length() > 0) {
-            if (whereClause.length() > 0) {
-                whereClause.append(" AND ");
-            }
-
-            whereClause.append('(');
-            whereClause.append(selection);
-            whereClause.append(')');
-        }
-
-        // And perform the generic query as requested
-        Cursor c = db.query(base, useProjection, whereClause.toString(),
-                selectionArgs, null, null, sortOrder,
-                null);
-        c.setNotificationUri(getContext().getContentResolver(), uri);
-        return c;
+        MergeCursor mergeCursor = new MergeCursor(new Cursor[] {recentCursor, searchCursor});
+        return mergeCursor;
     }
+
+
 
     @Override
     public String getType(Uri uri) {
         if (uriMatcher.match(uri) == URI_MATCH_SUGGEST) {
             return SearchManager.SUGGEST_MIME_TYPE;
-        }
-        int length = uri.getPathSegments().size();
-        if (length >= 1) {
-            String base = uri.getPathSegments().get(0);
-            if (base.equals(TABLE_SUGGESTIONS)) {
-                if (length == 1) {
-                    return "vnd.android.cursor.dir/suggestion";
-                } else if (length == 2) {
-                    return "vnd.android.cursor.item/suggestion";
-                }
-            }
         }
         throw new IllegalArgumentException("Unknown Uri");
     }
@@ -182,25 +156,13 @@ public class MusicSuggestionsProvider extends ContentProvider {
     public Uri insert(Uri uri, ContentValues values) {
         SQLiteDatabase db = openHelper.getWritableDatabase();
 
-        int length = uri.getPathSegments().size();
-        if (length < 1) {
-            throw new IllegalArgumentException("Unknown Uri");
-        }
-        // Note:  This table has on-conflict-replace semantics, so insert() may actually replace()
-        long rowID = -1;
-        String base = uri.getPathSegments().get(0);
-        Uri newUri = null;
-        if (base.equals(TABLE_SUGGESTIONS)) {
-            if (length == 1) {
-                rowID = db.insert(TABLE_SUGGESTIONS, Columns.QUERY, values);
-                if (rowID > 0) {
-                    newUri = Uri.withAppendedPath(URI_SUGGESTIONS, String.valueOf(rowID));
-                }
-            }
-        }
+        //TODO check valid uri?
+
+        long rowID = db.insert(TABLE_SUGGESTIONS, Columns.QUERY, values);
         if (rowID < 0) {
-            throw new IllegalArgumentException("Unknown Uri");
+            throw new IllegalArgumentException("Error inserting values to suggestions table");
         }
+        Uri newUri = Uri.withAppendedPath(SUGGESTIONS_URI, String.valueOf(rowID));
         getContext().getContentResolver().notifyChange(newUri, null);
         return newUri;
     }
@@ -209,25 +171,14 @@ public class MusicSuggestionsProvider extends ContentProvider {
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         SQLiteDatabase db = openHelper.getWritableDatabase();
 
-        final int length = uri.getPathSegments().size();
-        if (length != 1) {
-            throw new IllegalArgumentException("Unknown Uri");
-        }
-
-        final String base = uri.getPathSegments().get(0);
-        int count;
-        if (base.equals(TABLE_SUGGESTIONS)) {
-            count = db.delete(TABLE_SUGGESTIONS, selection, selectionArgs);
-        } else {
-            throw new IllegalArgumentException("Unknown Uri");
-        }
+        int count = db.delete(TABLE_SUGGESTIONS, selection, selectionArgs);
         getContext().getContentResolver().notifyChange(uri, null);
         return count;
     }
 
     @Override
     public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
-        return 0;
+        throw new UnsupportedOperationException("Update not supported");
     }
 
 
@@ -242,13 +193,13 @@ public class MusicSuggestionsProvider extends ContentProvider {
      * Add a query to the recent queries list.  Returns immediately, performing the save
      * in the background.
      *
-     * @param queryString The string as typed by the user.  This string will be displayed as
+     * @param title The string as typed by the user.  This string will be displayed as
      * the suggestion, and if the user clicks on the suggestion, this string will be sent to your
      * searchable activity (as a new search query).
-     * @param line2 Second line to display below the primary line
+     * @param album Second line to display below the primary line
      */
-    public static void saveRecentQuery(final Context context, final String queryString, final String line2) {
-        if (TextUtils.isEmpty(queryString)) {
+    public static void saveRecentQuery(final Context context, final String title, final String album, final long id) {
+        if (TextUtils.isEmpty(title)) {
             return;
         }
 
@@ -261,11 +212,12 @@ public class MusicSuggestionsProvider extends ContentProvider {
                 // Use content resolver (not cursor) to insert/update this query
                 try {
                     ContentValues values = new ContentValues();
-                    values.put(MusicSuggestionsProvider.Columns.TEXT1, queryString);
-                    values.put(MusicSuggestionsProvider.Columns.TEXT2, line2);
-                    values.put(MusicSuggestionsProvider.Columns.QUERY, queryString);
-                    values.put(MusicSuggestionsProvider.Columns.DATE, now);
-                    cr.insert(MusicSuggestionsProvider.URI_SUGGESTIONS, values);
+                    values.put(Columns._ID, id);
+                    values.put(Columns.TEXT1, title);
+                    values.put(Columns.TEXT2, album);
+                    values.put(Columns.QUERY, title);
+                    values.put(Columns.DATE, now);
+                    cr.insert(SUGGESTIONS_URI, values);
                 } catch (RuntimeException e) {
                     Log.e(TAG, "saveRecentQuery", e);
                 }
@@ -309,7 +261,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
                         " ORDER BY " + Columns.DATE + " DESC" +
                         " LIMIT -1 OFFSET " + String.valueOf(maxEntries) + ")";
             }
-            cr.delete(URI_SUGGESTIONS, selection, null);
+            cr.delete(SUGGESTIONS_URI, selection, null);
         } catch (RuntimeException e) {
             Log.e(TAG, "truncateHistory", e);
         }

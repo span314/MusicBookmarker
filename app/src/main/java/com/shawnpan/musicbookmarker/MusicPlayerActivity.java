@@ -105,8 +105,6 @@ public class MusicPlayerActivity extends ActionBarActivity {
             String query = intent.getStringExtra(SearchManager.QUERY);
             Log.v(TAG, "query: " + query);
             changeCursor(searchMusic(query));
-            //TODO clear history
-            MusicSuggestionsProvider.saveRecentQuery(this, query, "Line 2");
         }
     }
 
@@ -189,10 +187,13 @@ public class MusicPlayerActivity extends ActionBarActivity {
                 Cursor cursor = (Cursor) parent.getItemAtPosition(position);
                 long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
                 String musicTitle = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.TITLE));
+                String musicAlbum = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM));
+
                 Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
+
                 Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
                 startService(intent);
-                MusicSuggestionsProvider.saveRecentQuery(MusicPlayerActivity.this, musicTitle, "Line 2");
+                MusicSuggestionsProvider.saveRecentQuery(MusicPlayerActivity.this, musicTitle, musicAlbum, musicId);
 //                hideKeyboard();
             }
         });

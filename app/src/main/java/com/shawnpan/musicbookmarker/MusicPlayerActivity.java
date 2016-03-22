@@ -96,15 +96,20 @@ public class MusicPlayerActivity extends ActionBarActivity {
     @Override
     protected void onNewIntent(Intent intent) {
         Log.v(TAG, "onNewIntent");
-        handleIntent(intent);
-    }
-
-    private void handleIntent(Intent intent) {
-        Log.v(TAG, "handle intent");
-        if (intent != null && Intent.ACTION_SEARCH.equals(intent.getAction())) {
+        if (intent == null) {
+            return;
+        }
+        if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
             String query = intent.getStringExtra(SearchManager.QUERY);
             Log.v(TAG, "query: " + query);
             changeCursor(searchMusic(query));
+        } else if (Intent.ACTION_VIEW.equals(intent.getAction())) {
+            String query = intent.getStringExtra(SearchManager.QUERY);
+            Uri data = intent.getData();
+            Log.v(TAG, "view query: " + query);
+            Log.v(TAG, "view data: " + data);
+            Intent playIntent = new Intent(MusicService.ACTION_PLAY, data, getApplicationContext(), MusicService.class);
+            startService(playIntent);
         }
     }
 

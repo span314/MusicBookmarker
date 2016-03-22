@@ -27,16 +27,19 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String AUTHORITY = "com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider";
     private static final String DB_NAME = "musicbookmarkerdb";
     public static final String TABLE_SUGGESTIONS = "suggestions";
-    private static final int DB_VERSION = 6;
+    private static final int DB_VERSION = 7;
 
     private static final String DRAWABLE_PREFIX = "'" + ContentResolver.SCHEME_ANDROID_RESOURCE + "://com.shawnpan.musicbookmarker/";
     private static final String DRAWABLE_SUFFIX = "'";
     private static final String DRAWABLE_ACCESS_TIME = DRAWABLE_PREFIX + R.drawable.ic_access_time_white_48dp + DRAWABLE_SUFFIX;
     private static final String DRAWABLE_ALBUM = DRAWABLE_PREFIX + R.drawable.ic_album_white_48dp + DRAWABLE_SUFFIX;
+    private static final String CONTENT_URI = "'" + MediaStore.Audio.Media.EXTERNAL_CONTENT_URI + "'";
 
     private static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + TABLE_SUGGESTIONS);
     private static final String[] SUGGESTIONS_PROJECTION = new String [] {
             DRAWABLE_ACCESS_TIME + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1,
+            CONTENT_URI + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA,
+            MediaStore.Audio.Media._ID + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
             Columns.TEXT1,
             Columns.TEXT2,
             Columns.QUERY,
@@ -50,6 +53,8 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String SEARCH_FILTER = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
     private static final String[] SEARCH_PROJECTION = new String [] {
             DRAWABLE_ALBUM + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1,
+            CONTENT_URI + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA,
+            MediaStore.Audio.Media._ID + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
             MediaStore.Audio.Media.TITLE + " AS " + Columns.TEXT1,
             MediaStore.Audio.Media.ALBUM + " AS " + Columns.TEXT2,
             MediaStore.Audio.Media.TITLE + " AS " + Columns.QUERY,
@@ -57,15 +62,10 @@ public class MusicSuggestionsProvider extends ContentProvider {
     };
     private static final String SEARCH_ORDER_BY = MediaStore.Audio.Media.TITLE + " ASC LIMIT 20";
 
-
     private static final int URI_MATCH_SUGGEST = 1;
-
-    private SQLiteOpenHelper openHelper;
-    private UriMatcher uriMatcher;
-
-    public MusicSuggestionsProvider() {
-        uriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-        uriMatcher.addURI(AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY, URI_MATCH_SUGGEST);
+    private static final UriMatcher URI_MATCHER = new UriMatcher(UriMatcher.NO_MATCH);
+    static {
+        URI_MATCHER.addURI(AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY, URI_MATCH_SUGGEST);
     }
 
     /**
@@ -110,6 +110,8 @@ public class MusicSuggestionsProvider extends ContentProvider {
         }
     }
 
+    private SQLiteOpenHelper openHelper;
+
     @Override
     public boolean onCreate() {
         openHelper = new DatabaseHelper(getContext(), DB_VERSION);
@@ -120,7 +122,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         SQLiteDatabase db = openHelper.getReadableDatabase();
 
-        if (uriMatcher.match(uri) != URI_MATCH_SUGGEST) {
+        if (URI_MATCHER.match(uri) != URI_MATCH_SUGGEST) {
             throw new IllegalArgumentException("Invalid query");
         }
 
@@ -146,7 +148,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
-        if (uriMatcher.match(uri) == URI_MATCH_SUGGEST) {
+        if (URI_MATCHER.match(uri) == URI_MATCH_SUGGEST) {
             return SearchManager.SUGGEST_MIME_TYPE;
         }
         throw new IllegalArgumentException("Unknown Uri");

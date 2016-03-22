@@ -3,5 +3,6 @@
     android:label="@string/app_name"
     android:hint="@string/search_hint"
     android:searchSuggestAuthority="com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider"
+    android:searchSuggestIntentAction="android.intent.action.VIEW"
     android:searchSuggestSelection=" ?">
 </searchable>

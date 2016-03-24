@@ -17,19 +17,16 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.AdapterView;
-import android.widget.CursorAdapter;
-import android.widget.FilterQueryProvider;
 import android.widget.ImageButton;
-import android.widget.ListView;
 import android.widget.SearchView;
-import android.widget.SimpleCursorAdapter;
+import android.widget.TextView;
+
 import com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider;
 
 public class MusicPlayerActivity extends ActionBarActivity {
     private static final String TAG = "MusicPlayerActivity";
 
-    private ListView musicList;
+    private TextView infoText;
     private MusicSeekBar musicSeekBar;
     private ImageButton resetButton;
     private ImageButton previousButton;
@@ -62,32 +59,13 @@ public class MusicPlayerActivity extends ActionBarActivity {
         setContentView(R.layout.activity_music_player);
 
         //load views
-        musicList = (ListView) findViewById(R.id.music_list);
+        infoText = (TextView) findViewById(R.id.info_text);
         musicSeekBar = (MusicSeekBar) findViewById(R.id.seek_bar);
         resetButton = (ImageButton) findViewById(R.id.reset_button);
         previousButton = (ImageButton) findViewById(R.id.previous_button);
         playPauseButton = (ImageButton) findViewById(R.id.play_pause_button);
         nextButton = (ImageButton) findViewById(R.id.next_button);
         playModeButton = (ImageButton) findViewById(R.id.play_mode_button);
-
-        //setup list
-        String[] fromColumns = new String[] {MediaStore.Audio.Media.TITLE};
-        int[] toViews = new int[] {android.R.id.text1};
-        SimpleCursorAdapter selectMusicAdaptor = new SimpleCursorAdapter(MusicPlayerActivity.this, android.R.layout.simple_list_item_1, null, fromColumns, toViews, 0);
-        selectMusicAdaptor.setFilterQueryProvider(new FilterQueryProvider() {
-            @Override
-            public Cursor runQuery(CharSequence constraint) {
-                return searchMusic(constraint);
-            }
-        });
-        selectMusicAdaptor.setCursorToStringConverter(new SimpleCursorAdapter.CursorToStringConverter() {
-            @Override
-            public CharSequence convertToString(Cursor cursor) {
-                String title = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.TITLE));
-                return title;
-            }
-        });
-        musicList.setAdapter(selectMusicAdaptor);
 
         bindListeners();
     }
@@ -101,42 +79,21 @@ public class MusicPlayerActivity extends ActionBarActivity {
         }
         if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
             String query = intent.getStringExtra(SearchManager.QUERY);
-            Log.v(TAG, "query: " + query);
-            changeCursor(searchMusic(query));
+            Log.e(TAG, "query: " + query); //TODO
         } else if (Intent.ACTION_VIEW.equals(intent.getAction())) {
-            String musicIdString = intent.getStringExtra(SearchManager.EXTRA_DATA_KEY);
-            long musicId = Long.parseLong(musicIdString);
-            //Uri musicInfoUri = ContentUris.withAppendedId(MusicSuggestionsProvider.SUGGESTIONS_URI, musicId);
-            //Log.v(TAG, "view info uri: " + musicInfoUri);
-            Cursor musicInfoCursor = getContentResolver().query(MusicSuggestionsProvider.GET_INFO_URI, null, null, new String[]{musicIdString}, null);
+            String[] musicIdLookupArgs = new String[] {intent.getStringExtra(SearchManager.EXTRA_DATA_KEY)};
+            Cursor musicInfoCursor = getContentResolver().query(MusicSuggestionsProvider.GET_INFO_URI, null, null, musicIdLookupArgs, null);
+            musicInfoCursor.moveToFirst();
+            long musicId = musicInfoCursor.getLong(musicInfoCursor.getColumnIndex(MusicSuggestionsProvider.MusicColumns._ID));
+            String title = musicInfoCursor.getString(musicInfoCursor.getColumnIndex(MusicSuggestionsProvider.MusicColumns.TITLE));
             musicInfoCursor.close();
+
+            infoText.setText(title);
             Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
             Log.v(TAG, "view music uri: " + musicUri);
             Intent playIntent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
             startService(playIntent);
-            //MusicSuggestionsProvider.saveRecentQuery(this, musicId);
         }
-    }
-
-    private Cursor searchMusic(CharSequence constraint) {
-        Uri uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-        String[] select = new String[]{MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.TRACK, MediaStore.Audio.Media.ALBUM};
-        String where = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
-        String likePattern = constraint + "%";
-        String[] args = new String[]{likePattern, likePattern};
-        String orderBy = "title ASC LIMIT 20";
-        return getContentResolver().query(uri, select, where, args, orderBy);
-    }
-
-    @Override
-    protected void onDestroy() {
-        changeCursor(null); //Close cursor on adapter
-        super.onDestroy();
-    }
-
-    private void changeCursor(Cursor cursor) {
-        CursorAdapter adapter = (CursorAdapter) musicList.getAdapter();
-        adapter.changeCursor(cursor);
     }
 
     private void bindListeners() {
@@ -190,31 +147,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
                 }
             }
         });
-
-        musicList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Cursor cursor = (Cursor) parent.getItemAtPosition(position);
-                long musicId = cursor.getLong(cursor.getColumnIndex(MediaStore.Audio.Media._ID));
-                //String musicTitle = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.TITLE));
-                //String musicAlbum = cursor.getString(cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM));
-
-                Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
-
-                Intent intent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
-                startService(intent);
-                //MusicSuggestionsProvider.saveRecentQuery(MusicPlayerActivity.this, musicId); //TODO remove?
-//                hideKeyboard();
-            }
-        });
     }
-
-    //TODO?
-//    private void hideKeyboard() {
-//        selectMusic.clearFocus();
-//        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-//        imm.hideSoftInputFromWindow(selectMusic.getWindowToken(), 0);
-//    }
 
     @Override
     protected void onStart() {

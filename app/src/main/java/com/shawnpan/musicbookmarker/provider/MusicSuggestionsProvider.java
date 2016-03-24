@@ -7,7 +7,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.UriMatcher;
 import android.database.Cursor;
-import android.database.MergeCursor;
+import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
@@ -18,6 +18,9 @@ import android.util.Log;
 
 import com.shawnpan.musicbookmarker.R;
 
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Content provider for search suggestions.
  */
@@ -27,55 +30,30 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String AUTHORITY = "com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider";
     private static final String DB_NAME = "musicbookmarkerdb";
     public static final String TABLE_SUGGESTIONS = "suggestions";
-    private static final int DB_VERSION = 7;
-
-    private static final String DRAWABLE_PREFIX = "'" + ContentResolver.SCHEME_ANDROID_RESOURCE + "://com.shawnpan.musicbookmarker/";
-    private static final String DRAWABLE_SUFFIX = "'";
-    private static final String DRAWABLE_ACCESS_TIME = DRAWABLE_PREFIX + R.drawable.ic_access_time_white_48dp + DRAWABLE_SUFFIX;
-    private static final String DRAWABLE_ALBUM = DRAWABLE_PREFIX + R.drawable.ic_album_white_48dp + DRAWABLE_SUFFIX;
-    private static final String CONTENT_URI = "'" + MediaStore.Audio.Media.EXTERNAL_CONTENT_URI + "'";
+    private static final int DB_VERSION = 11;
 
     private static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + TABLE_SUGGESTIONS);
-    private static final String[] SUGGESTIONS_PROJECTION = new String [] {
-            DRAWABLE_ACCESS_TIME + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1,
-            CONTENT_URI + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA,
-            MediaStore.Audio.Media._ID + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
-            Columns.TEXT1,
-            Columns.TEXT2,
-            Columns.QUERY,
-            Columns._ID
-    };
-    private static final String SUGGESTIONS_FILTER = Columns.TEXT1 + " LIKE ? OR " + Columns.TEXT2 + " LIKE ?";
-    private static final String SUGGESTIONS_ORDER_BY = "date DESC";
-    private static final String SUGGESTIONS_LIMIT = "20";
+    private static final String GET_INFO = "get_info";
+    public static final Uri GET_INFO_URI = Uri.parse("content://" + AUTHORITY + "/" + GET_INFO);
 
-    private static final Uri SEARCH_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-    private static final String SEARCH_FILTER = MediaStore.Audio.Media.IS_MUSIC + " = 1 and (" + MediaStore.Audio.Media.TITLE + " like ? or " + MediaStore.Audio.Media.ALBUM + " like ?)";
-    private static final String[] SEARCH_PROJECTION = new String [] {
-            DRAWABLE_ALBUM + " AS " + SearchManager.SUGGEST_COLUMN_ICON_1,
-            CONTENT_URI + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA,
-            MediaStore.Audio.Media._ID + " AS " + SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID,
-            MediaStore.Audio.Media.TITLE + " AS " + Columns.TEXT1,
-            MediaStore.Audio.Media.ALBUM + " AS " + Columns.TEXT2,
-            MediaStore.Audio.Media.TITLE + " AS " + Columns.QUERY,
-            MediaStore.Audio.Media._ID + " AS " + Columns._ID
-    };
-    private static final String SEARCH_ORDER_BY = MediaStore.Audio.Media.TITLE + " ASC LIMIT 20";
 
     private static final int URI_MATCH_SUGGEST = 1;
+    private static final int URI_MATCH_GET = 2;
     private static final UriMatcher URI_MATCHER = new UriMatcher(UriMatcher.NO_MATCH);
     static {
         URI_MATCHER.addURI(AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY, URI_MATCH_SUGGEST);
+        URI_MATCHER.addURI(AUTHORITY, GET_INFO, URI_MATCH_GET);
     }
 
     /**
-     * Column names
+     * Additional columns for local music table.
+     * Implements AudioColumns for convenience, although not all columns are mirrored
+     * in the local music table.
      */
-    public static class Columns implements BaseColumns {
-        public static final String TEXT1 = SearchManager.SUGGEST_COLUMN_TEXT_1;
-        public static final String TEXT2 = SearchManager.SUGGEST_COLUMN_TEXT_2;
-        public static final String QUERY = SearchManager.SUGGEST_COLUMN_QUERY;
-        public static final String DATE = "date";
+    public static class MusicColumns implements MediaStore.Audio.AudioColumns {
+        public static final String LAST_USED = "last_used";
+        public static final String DISPLAY_NAME = "display_name";
+        public static final String DISPLAY_NAME_KEY = "display_name_key";
     }
 
     /**
@@ -92,13 +70,20 @@ public class MusicSuggestionsProvider extends ContentProvider {
             String command =
                     "CREATE TABLE " + TABLE_SUGGESTIONS +
                     " (" +
-                    Columns._ID + " PRIMARY KEY UNIQUE ON CONFLICT REPLACE, " +
-                    Columns.TEXT1 + " TEXT, " +
-                    Columns.TEXT2 + " TEXT, " +
-                    Columns.QUERY + " TEXT, " +
-                    Columns.DATE + " LONG" +
+                    MusicColumns._ID + " LONG PRIMARY KEY UNIQUE, " +
+                    MusicColumns.LAST_USED + " LONG, " +
+                    MusicColumns.DISPLAY_NAME + " TEXT, " +
+                    MusicColumns.DISPLAY_NAME_KEY + " TEXT, " +
+                    MusicColumns.TITLE + " TEXT, " +
+                    MusicColumns.TITLE_KEY + " TEXT, " +
+                    MusicColumns.ALBUM + " TEXT, " +
+                    MusicColumns.ALBUM_KEY + " TEXT, " +
+                    MusicColumns.ARTIST + " TEXT, " +
+                    MusicColumns.ARTIST_KEY + " TEXT" +
                     ");";
             db.execSQL(command);
+            //TODO create index
+            //"CREATE INDEX last_used_index ON " + TABLE_SUGGESTIONS + "(" + MusicColumns.LAST_USED + ")"
         }
 
         @Override
@@ -120,31 +105,188 @@ public class MusicSuggestionsProvider extends ContentProvider {
 
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
+        switch (URI_MATCHER.match(uri)) {
+            case URI_MATCH_SUGGEST:
+                return getSuggestions(selectionArgs[0]);
+            case URI_MATCH_GET:
+                return getById(selectionArgs[0]);
+                //TODO allow arbitrary queries?
+        }
+        throw new IllegalArgumentException("Invalid query URI: " + uri);
+    }
+
+    private static final int RESULT_LIMIT = 50;
+    private static final String[] SUGGESTIONS_PROJECTION = new String [] {
+            MusicColumns._ID,
+            MusicColumns.DISPLAY_NAME,
+            MusicColumns.TITLE,
+            MusicColumns.ALBUM,
+            MusicColumns.ARTIST
+    };
+    private static final String SUGGESTIONS_FILTER =
+            MusicColumns.DISPLAY_NAME_KEY + " LIKE ? OR " +
+            MusicColumns.TITLE_KEY + " LIKE ? OR " +
+            MusicColumns.ALBUM_KEY + " LIKE ? OR " +
+            MusicColumns.ARTIST_KEY + " LIKE ?";
+
+    private static final String SUGGESTIONS_ORDER_BY = MusicColumns.LAST_USED + " DESC";
+    private static final String SUGGESTIONS_LIMIT = Integer.toString(RESULT_LIMIT);
+
+    private static final Uri SEARCH_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+    private static final String SEARCH_FILTER =
+            MusicColumns.IS_MUSIC + " = 1 AND (" +
+            MusicColumns.TITLE_KEY + " LIKE ? OR " +
+            MusicColumns.ALBUM_KEY + " LIKE ? OR " +
+            MusicColumns.ARTIST_KEY + " LIKE ?)";
+    private static final String[] SEARCH_PROJECTION = new String [] {
+            MusicColumns._ID,
+            MusicColumns.TITLE,
+            MusicColumns.ALBUM,
+            MusicColumns.ARTIST
+    };
+    private static final String SEARCH_ORDER_BY_LIMIT = MediaStore.Audio.Media.TITLE + " ASC LIMIT " + RESULT_LIMIT;
+
+
+    private static final String[] SUGGESTION_COLUMNS = new String[]{
+            BaseColumns._ID,
+            SearchManager.SUGGEST_COLUMN_TEXT_1,
+            SearchManager.SUGGEST_COLUMN_TEXT_2,
+            SearchManager.SUGGEST_COLUMN_QUERY,
+            SearchManager.SUGGEST_COLUMN_ICON_1,
+            SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA
+    };
+
+    private static final String DRAWABLE_PREFIX = ContentResolver.SCHEME_ANDROID_RESOURCE + "://com.shawnpan.musicbookmarker/";
+    private static final String DRAWABLE_ACCESS_TIME = DRAWABLE_PREFIX + R.drawable.ic_access_time_white_48dp;
+    private static final String DRAWABLE_ALBUM = DRAWABLE_PREFIX + R.drawable.ic_album_white_48dp;
+
+
+
+    private Cursor getSuggestions(String keyword) {
         SQLiteDatabase db = openHelper.getReadableDatabase();
 
-        if (URI_MATCHER.match(uri) != URI_MATCH_SUGGEST) {
-            throw new IllegalArgumentException("Invalid query");
+        String constraint;
+        String recentFilter = null;
+        String searchFilter = null;
+        String[] recentArgs = null;
+        String[] searchArgs = null;
+        if (!TextUtils.isEmpty(keyword)) {
+            constraint  = MediaStore.Audio.keyFor(keyword) + "%";
+            recentFilter = SUGGESTIONS_FILTER;
+            searchFilter = SEARCH_FILTER;
+            recentArgs = new String[] {constraint, constraint, constraint, constraint};
+            searchArgs = new String[] {constraint, constraint, constraint};
         }
 
-        String query = selectionArgs[0];
+        //De-duplicate results by id
+        Set<Long> addedIds = new HashSet<>();
+        MatrixCursor matrixCursor = new MatrixCursor(SUGGESTION_COLUMNS);
 
-        //Return recent results when query is empty
-        if (TextUtils.isEmpty(query)) {
-            Cursor allRecentCursor = db.query(TABLE_SUGGESTIONS, SUGGESTIONS_PROJECTION, null, null, null, null, SUGGESTIONS_ORDER_BY, SUGGESTIONS_LIMIT);
-            return allRecentCursor;
+        //First query local music table
+        Cursor recentCursor = db.query(TABLE_SUGGESTIONS, SUGGESTIONS_PROJECTION, recentFilter, recentArgs, null, null, SUGGESTIONS_ORDER_BY, SUGGESTIONS_LIMIT);
+        while (recentCursor.moveToNext()) {
+            long id = recentCursor.getLong(0);
+            addedIds.add(id);
+            String displayName = recentCursor.getString(1);
+            String title = recentCursor.getString(2);
+            String album = recentCursor.getString(3);
+            String artist = recentCursor.getString(4);
+            String line1;
+            String line2;
+            if (TextUtils.isEmpty(displayName)) {
+                line1 = title;
+                line2 = concatNonEmpty(" - ", album, artist);
+            } else {
+                line1 = displayName;
+                line2 = concatNonEmpty(" - ", title, album, artist);
+            }
+            matrixCursor.newRow()
+                    .add(id)
+                    .add(line1)
+                    .add(line2)
+                    .add(title)
+                    .add(DRAWABLE_ACCESS_TIME)
+                    .add(Long.toString(id));
         }
+        recentCursor.close();
 
-        String like = query + "%";
-        String[] args = new String[]{like, like};
-        Cursor recentCursor = db.query(TABLE_SUGGESTIONS, SUGGESTIONS_PROJECTION, SUGGESTIONS_FILTER, args, null, null, SUGGESTIONS_ORDER_BY, SUGGESTIONS_LIMIT);
-        recentCursor.setNotificationUri(getContext().getContentResolver(), uri);
-        Cursor searchCursor = getContext().getContentResolver().query(SEARCH_URI, SEARCH_PROJECTION, SEARCH_FILTER, args, SEARCH_ORDER_BY);
+        //Then query media store
+        Cursor searchCursor = getContext().getContentResolver().query(SEARCH_URI, SEARCH_PROJECTION, searchFilter, searchArgs, SEARCH_ORDER_BY_LIMIT);
+        while (matrixCursor.getCount() < RESULT_LIMIT && searchCursor.moveToNext()) {
+            long id = searchCursor.getLong(0);
+            if (addedIds.add(id)) {
+                String title = searchCursor.getString(1);
+                String album = searchCursor.getString(2);
+                String artist = searchCursor.getString(3);
+                String line2 = concatNonEmpty(" - ", album, artist);
+                matrixCursor.newRow()
+                        .add(id)
+                        .add(title)
+                        .add(line2)
+                        .add(title)
+                        .add(DRAWABLE_ALBUM)
+                        .add(Long.toString(id));
+            }
+        }
+        searchCursor.close();
 
-        MergeCursor mergeCursor = new MergeCursor(new Cursor[] {recentCursor, searchCursor});
-        return mergeCursor;
+        return matrixCursor;
+    }
+
+    private static String concatNonEmpty(String separator, String... parts) {
+        StringBuilder builder = new StringBuilder();
+        for (String part : parts) {
+            if (!TextUtils.isEmpty(part)) {
+                builder.append(part);
+                builder.append(separator);
+            }
+        }
+        return builder.substring(0, builder.length() - separator.length());
     }
 
 
+
+    private static final String[] RESULT_COLUMNS = new String[] {
+            MusicColumns._ID,
+            MusicColumns.TITLE,
+            MusicColumns.ALBUM,
+            MusicColumns.ARTIST,
+            MusicColumns.DISPLAY_NAME
+    };
+
+    private Cursor getById(String id) {
+        String filter = "_id = ?";
+        String[] args = new String[] {id};
+
+        //select from mediastore by id
+        Cursor searchCursor = getContext().getContentResolver().query(SEARCH_URI, SEARCH_PROJECTION, filter, args, null);
+        searchCursor.moveToFirst();
+        long searchId = searchCursor.getLong(0);
+        String title = searchCursor.getString(1);
+        String album = searchCursor.getString(2);
+        String artist = searchCursor.getString(3);
+        searchCursor.close();
+
+        //select from music table by id
+        //Cursor recentCursor = db.query(TABLE_SUGGESTIONS, SUGGESTIONS_PROJECTION, filter, args, null, null, SUGGESTIONS_ORDER_BY, SUGGESTIONS_LIMIT);
+
+        //if both -1, throw exception
+        //if mediastore -1, select from mediastore by title, album, artist
+
+        //start update to music table
+        asyncSaveRecentQuery(getContext(), Long.parseLong(id), title, album, artist, null);
+
+        //return media store cursor result
+
+        MatrixCursor matrixCursor = new MatrixCursor(RESULT_COLUMNS);
+        matrixCursor.newRow()
+                .add(searchId)
+                .add(title)
+                .add(album)
+                .add(artist)
+                .add(null);
+        return matrixCursor;
+    }
 
     @Override
     public String getType(Uri uri) {
@@ -160,7 +302,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
 
         //TODO check valid uri?
 
-        long rowID = db.insert(TABLE_SUGGESTIONS, Columns.QUERY, values);
+        long rowID = db.insertWithOnConflict(TABLE_SUGGESTIONS, MusicColumns.LAST_USED, values, SQLiteDatabase.CONFLICT_REPLACE);
         if (rowID < 0) {
             throw new IllegalArgumentException("Error inserting values to suggestions table");
         }
@@ -189,39 +331,34 @@ public class MusicSuggestionsProvider extends ContentProvider {
      */
 
 
-    private static final int MAX_HISTORY_COUNT = 250;
+    private static final int MAX_HISTORY_COUNT = 100;
 
     /**
      * Add a query to the recent queries list.  Returns immediately, performing the save
      * in the background.
-     *
-     * @param title The string as typed by the user.  This string will be displayed as
-     * the suggestion, and if the user clicks on the suggestion, this string will be sent to your
-     * searchable activity (as a new search query).
-     * @param album Second line to display below the primary line
      */
-    public static void saveRecentQuery(final Context context, final String title, final String album, final long id) {
-        if (TextUtils.isEmpty(title)) {
-            return;
-        }
-
-        new Thread("saveRecentQuery") {
+    private static void asyncSaveRecentQuery(final Context context, final long id, final String title, final String album, final String artist, final String displayName) {
+        new Thread("asyncSaveRecentQuery") {
             @Override
             public void run() {
                 ContentResolver cr = context.getContentResolver();
                 long now = System.currentTimeMillis();
 
-                // Use content resolver (not cursor) to insert/update this query
                 try {
                     ContentValues values = new ContentValues();
-                    values.put(Columns._ID, id);
-                    values.put(Columns.TEXT1, title);
-                    values.put(Columns.TEXT2, album);
-                    values.put(Columns.QUERY, title);
-                    values.put(Columns.DATE, now);
+                    values.put(MusicColumns._ID, id);
+                    values.put(MusicColumns.LAST_USED, now);
+                    values.put(MusicColumns.DISPLAY_NAME, displayName);
+                    values.put(MusicColumns.DISPLAY_NAME_KEY, MediaStore.Audio.keyFor(displayName));
+                    values.put(MusicColumns.TITLE, title);
+                    values.put(MusicColumns.TITLE_KEY, MediaStore.Audio.keyFor(title));
+                    values.put(MusicColumns.ALBUM, album);
+                    values.put(MusicColumns.ALBUM_KEY, MediaStore.Audio.keyFor(album));
+                    values.put(MusicColumns.ARTIST, artist);
+                    values.put(MusicColumns.ARTIST_KEY, MediaStore.Audio.keyFor(artist));
                     cr.insert(SUGGESTIONS_URI, values);
                 } catch (RuntimeException e) {
-                    Log.e(TAG, "saveRecentQuery", e);
+                    Log.e(TAG, "asyncSaveRecentQuery", e);
                 }
 
                 // Shorten the list (if it has become too long)
@@ -258,9 +395,9 @@ public class MusicSuggestionsProvider extends ContentProvider {
             // null means "delete all".  otherwise "delete but leave n newest"
             String selection = null;
             if (maxEntries > 0) {
-                selection = Columns._ID + " IN " +
-                        "(SELECT " + Columns._ID + " FROM " + TABLE_SUGGESTIONS +
-                        " ORDER BY " + Columns.DATE + " DESC" +
+                selection = BaseColumns._ID + " IN " +
+                        "(SELECT " + BaseColumns._ID + " FROM " + TABLE_SUGGESTIONS +
+                        " ORDER BY " + MusicColumns.LAST_USED + " DESC" +
                         " LIMIT -1 OFFSET " + String.valueOf(maxEntries) + ")";
             }
             cr.delete(SUGGESTIONS_URI, selection, null);

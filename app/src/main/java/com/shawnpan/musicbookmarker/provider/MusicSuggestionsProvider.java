@@ -170,9 +170,8 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String DRAWABLE_PREFIX = ContentResolver.SCHEME_ANDROID_RESOURCE + "://com.shawnpan.musicbookmarker/";
     private static final String DRAWABLE_ACCESS_TIME = DRAWABLE_PREFIX + R.drawable.ic_access_time_white_48dp;
     private static final String DRAWABLE_ALBUM = DRAWABLE_PREFIX + R.drawable.ic_album_white_48dp;
-
-
     private static final String SEPARATOR = " - ";
+    
     private Cursor getSuggestions(String keyword) {
         SQLiteDatabase db = openHelper.getReadableDatabase();
 
@@ -196,14 +195,36 @@ public class MusicSuggestionsProvider extends ContentProvider {
         //First query local music table
         Cursor recentCursor = db.query(TABLE_MUSIC, RECENT_PROJECTION, recentFilter, recentArgs, null, null, RECENT_ORDER_BY, RECENT_LIMIT);
         while (recentCursor.moveToNext()) {
-            long id = recentCursor.getLong(COLUMN_INDEX_ID);
-            addedIds.add(id);
-            String title = recentCursor.getString(COLUMN_INDEX_TITLE);
-            String album = recentCursor.getString(COLUMN_INDEX_ALBUM);
-            String artist = recentCursor.getString(COLUMN_INDEX_ARTIST);
-            String displayName = recentCursor.getString(COLUMN_INDEX_DISPLAY_NAME);
+            addMusicItem(recentCursor, matrixCursor, addedIds, true);
+        }
+        recentCursor.close();
+
+        //Then query media store
+        Cursor searchCursor = getContext().getContentResolver().query(SEARCH_URI, SEARCH_PROJECTION, searchFilter, searchArgs, SEARCH_ORDER_BY_LIMIT);
+        while (matrixCursor.getCount() < RESULT_LIMIT && searchCursor.moveToNext()) {
+            addMusicItem(searchCursor, matrixCursor, addedIds, false);
+        }
+        searchCursor.close();
+
+        return matrixCursor;
+    }
+
+    private static void addMusicItem(Cursor inputCursor, MatrixCursor outputCursor, Set<Long> addedIds, boolean recent) {
+        long id = inputCursor.getLong(COLUMN_INDEX_ID);
+        if (addedIds.add(id)) { //only add unique items
+            String title = inputCursor.getString(COLUMN_INDEX_TITLE);
+            String album = inputCursor.getString(COLUMN_INDEX_ALBUM);
+            String artist = inputCursor.getString(COLUMN_INDEX_ARTIST);
+            String displayName = null;
+            String icon;
             String line1;
             String line2;
+            if (recent) {
+                displayName = inputCursor.getString(COLUMN_INDEX_DISPLAY_NAME);
+                icon = DRAWABLE_ACCESS_TIME;
+            } else {
+                icon = DRAWABLE_ALBUM;
+            }
             if (TextUtils.isEmpty(displayName)) {
                 line1 = title;
                 line2 = concatNonEmpty(SEPARATOR, album, artist);
@@ -211,37 +232,14 @@ public class MusicSuggestionsProvider extends ContentProvider {
                 line1 = displayName;
                 line2 = concatNonEmpty(SEPARATOR, title, album, artist);
             }
-            matrixCursor.newRow()
+            outputCursor.newRow()
                     .add(id)
                     .add(line1)
                     .add(line2)
                     .add(title)
-                    .add(DRAWABLE_ACCESS_TIME)
+                    .add(icon)
                     .add(Long.toString(id));
         }
-        recentCursor.close();
-
-        //Then query media store
-        Cursor searchCursor = getContext().getContentResolver().query(SEARCH_URI, SEARCH_PROJECTION, searchFilter, searchArgs, SEARCH_ORDER_BY_LIMIT);
-        while (matrixCursor.getCount() < RESULT_LIMIT && searchCursor.moveToNext()) {
-            long id = searchCursor.getLong(COLUMN_INDEX_ID);
-            if (addedIds.add(id)) {
-                String title = searchCursor.getString(COLUMN_INDEX_TITLE);
-                String album = searchCursor.getString(COLUMN_INDEX_ALBUM);
-                String artist = searchCursor.getString(COLUMN_INDEX_ARTIST);
-                String line2 = concatNonEmpty(SEPARATOR, album, artist);
-                matrixCursor.newRow()
-                        .add(id)
-                        .add(title)
-                        .add(line2)
-                        .add(title)
-                        .add(DRAWABLE_ALBUM)
-                        .add(Long.toString(id));
-            }
-        }
-        searchCursor.close();
-
-        return matrixCursor;
     }
 
     private static String concatNonEmpty(String separator, String... parts) {
@@ -254,8 +252,6 @@ public class MusicSuggestionsProvider extends ContentProvider {
         }
         return builder.substring(0, builder.length() - separator.length());
     }
-
-
 
     private static final String[] RESULT_COLUMNS = new String[] {
             MusicColumns._ID,

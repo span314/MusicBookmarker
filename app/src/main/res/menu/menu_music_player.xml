@@ -3,7 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="com.shawnpan.musicbookmarker.MusicPlayerActivity">
 
-    <!--TODO fix icon and title -->
     <item
         android:id="@+id/search"
         android:orderInCategory="50"

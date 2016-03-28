@@ -21,6 +21,7 @@ import android.widget.ImageButton;
 import android.widget.SearchView;
 import android.widget.TextView;
 
+import com.shawnpan.musicbookmarker.provider.MusicColumns;
 import com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider;
 
 public class MusicPlayerActivity extends ActionBarActivity {
@@ -84,8 +85,8 @@ public class MusicPlayerActivity extends ActionBarActivity {
             String[] musicIdLookupArgs = new String[] {intent.getStringExtra(SearchManager.EXTRA_DATA_KEY)};
             Cursor musicInfoCursor = getContentResolver().query(MusicSuggestionsProvider.GET_INFO_URI, null, null, musicIdLookupArgs, null);
             musicInfoCursor.moveToFirst();
-            long musicId = musicInfoCursor.getLong(musicInfoCursor.getColumnIndex(MusicSuggestionsProvider.MusicColumns._ID));
-            String title = musicInfoCursor.getString(musicInfoCursor.getColumnIndex(MusicSuggestionsProvider.MusicColumns.TITLE));
+            long musicId = musicInfoCursor.getLong(musicInfoCursor.getColumnIndex(MusicColumns._ID));
+            String title = musicInfoCursor.getString(musicInfoCursor.getColumnIndex(MusicColumns.TITLE));
             musicInfoCursor.close();
 
             infoText.setText(title);
@@ -214,6 +215,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
         SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
         SearchView searchView = (SearchView) menu.findItem(R.id.search).getActionView();
         searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
+        searchView.setIconified(false);
 
         return true;
     }

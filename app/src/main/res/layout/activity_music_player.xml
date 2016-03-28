@@ -16,9 +16,19 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/info_text"
-        android:textSize="20sp"
+        android:id="@+id/title_text"
+        android:freezesText="true"
+        android:textSize="22sp"
         android:textIsSelectable="false" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/info_text"
+        android:freezesText="true"
+        android:textSize="18sp"
+        android:textIsSelectable="false"
+        android:paddingBottom="18dp" />
 
     <com.shawnpan.musicbookmarker.MusicSeekBar
         android:layout_width="match_parent"

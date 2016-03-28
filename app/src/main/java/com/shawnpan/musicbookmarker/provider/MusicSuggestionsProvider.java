@@ -26,9 +26,11 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String TABLE_MUSIC = MusicBookmarksDatabaseHelper.TABLE_MUSIC;
 
     private static final Uri SEARCH_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-    private static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + TABLE_MUSIC);
+    private static final Uri MUSIC_TABLE_URI = Uri.parse("content://" + AUTHORITY + "/" + TABLE_MUSIC);
     private static final String GET_INFO = "get_info";
+    public static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + SearchManager.SUGGEST_URI_PATH_QUERY);
     public static final Uri GET_INFO_URI = Uri.parse("content://" + AUTHORITY + "/" + GET_INFO);
+
 
     private static final int URI_MATCH_SUGGEST = 1;
     private static final int URI_MATCH_GET = 2;
@@ -159,6 +161,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
                     .add(mediaStoreItem.getArtist())
                     .add(displayName);
         }
+        searchCursor.close();
 
         if (result.getCount() == 1) {
             //start update to music table
@@ -193,7 +196,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
         if (rowID < 0) {
             throw new IllegalArgumentException("Error inserting values to suggestions table");
         }
-        Uri newUri = Uri.withAppendedPath(SUGGESTIONS_URI, String.valueOf(rowID));
+        Uri newUri = Uri.withAppendedPath(MUSIC_TABLE_URI, String.valueOf(rowID));
         getContext().getContentResolver().notifyChange(newUri, null);
         return newUri;
     }
@@ -243,7 +246,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
                     values.put(MusicColumns.ALBUM_KEY, MediaStore.Audio.keyFor(musicItem.getAlbum()));
                     values.put(MusicColumns.ARTIST, musicItem.getArtist());
                     values.put(MusicColumns.ARTIST_KEY, MediaStore.Audio.keyFor(musicItem.getArtist()));
-                    cr.insert(SUGGESTIONS_URI, values);
+                    cr.insert(MUSIC_TABLE_URI, values);
                 } catch (RuntimeException e) {
                     Log.e(TAG, "asyncSaveRecentQuery", e);
                 }
@@ -287,7 +290,7 @@ public class MusicSuggestionsProvider extends ContentProvider {
                         " ORDER BY " + MusicColumns.LAST_USED + " DESC" +
                         " LIMIT -1 OFFSET " + String.valueOf(maxEntries) + ")";
             }
-            cr.delete(SUGGESTIONS_URI, selection, null);
+            cr.delete(MUSIC_TABLE_URI, selection, null);
         } catch (RuntimeException e) {
             Log.e(TAG, "truncateHistory", e);
         }

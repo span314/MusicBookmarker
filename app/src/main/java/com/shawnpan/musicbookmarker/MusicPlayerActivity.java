@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.provider.BaseColumns;
 import android.provider.MediaStore;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
@@ -20,13 +21,15 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.SearchView;
 import android.widget.TextView;
+import android.widget.Toast;
 
-import com.shawnpan.musicbookmarker.provider.MusicColumns;
+import com.shawnpan.musicbookmarker.provider.MusicItem;
 import com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider;
 
 public class MusicPlayerActivity extends ActionBarActivity {
     private static final String TAG = "MusicPlayerActivity";
 
+    private TextView titleText;
     private TextView infoText;
     private MusicSeekBar musicSeekBar;
     private ImageButton resetButton;
@@ -60,6 +63,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
         setContentView(R.layout.activity_music_player);
 
         //load views
+        titleText = (TextView) findViewById(R.id.title_text);
         infoText = (TextView) findViewById(R.id.info_text);
         musicSeekBar = (MusicSeekBar) findViewById(R.id.seek_bar);
         resetButton = (ImageButton) findViewById(R.id.reset_button);
@@ -79,22 +83,46 @@ public class MusicPlayerActivity extends ActionBarActivity {
             return;
         }
         if (Intent.ACTION_SEARCH.equals(intent.getAction())) {
-            String query = intent.getStringExtra(SearchManager.QUERY);
-            Log.e(TAG, "query: " + query); //TODO
+            playMusicBySearchString(intent.getStringExtra(SearchManager.QUERY));
         } else if (Intent.ACTION_VIEW.equals(intent.getAction())) {
-            String[] musicIdLookupArgs = new String[] {intent.getStringExtra(SearchManager.EXTRA_DATA_KEY)};
-            Cursor musicInfoCursor = getContentResolver().query(MusicSuggestionsProvider.GET_INFO_URI, null, null, musicIdLookupArgs, null);
-            musicInfoCursor.moveToFirst();
-            long musicId = musicInfoCursor.getLong(musicInfoCursor.getColumnIndex(MusicColumns._ID));
-            String title = musicInfoCursor.getString(musicInfoCursor.getColumnIndex(MusicColumns.TITLE));
-            musicInfoCursor.close();
+            playMusicById(intent.getStringExtra(SearchManager.EXTRA_DATA_KEY));
+        } else {
+            Log.e(TAG, "Unknown intent type");
+        }
+    }
 
-            infoText.setText(title);
-            Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicId);
-            Log.v(TAG, "view music uri: " + musicUri);
+    private void playMusicBySearchString(String query) {
+        String[] musicSearchArgs = new String[] {query};
+        Cursor musicSearchCursor = getContentResolver().query(MusicSuggestionsProvider.SUGGESTIONS_URI, null, null, musicSearchArgs, null);
+        if (musicSearchCursor.moveToFirst()) {
+            Log.v(TAG, "Taking first match for query: " + query);
+            String idString = Long.toString(musicSearchCursor.getLong(musicSearchCursor.getColumnIndex(BaseColumns._ID)));
+            playMusicById(idString);
+        } else {
+            Toast.makeText(this, R.string.search_no_matches, Toast.LENGTH_SHORT).show();
+        }
+        musicSearchCursor.close();
+    }
+
+    private void playMusicById(String idString) {
+        String[] musicIdLookupArgs = new String[] {idString};
+        Cursor musicInfoCursor = getContentResolver().query(MusicSuggestionsProvider.GET_INFO_URI, null, null, musicIdLookupArgs, null);
+        if (musicInfoCursor.moveToFirst()) {
+            if (musicInfoCursor.getCount() > 1) {
+                Log.w(TAG, "Warning multiple matches, taking first match");
+                Toast.makeText(this, R.string.music_modified, Toast.LENGTH_LONG).show();
+            }
+            MusicItem musicItem = MusicItem.fromMusicTableCursor(musicInfoCursor);
+            titleText.setText(musicItem.getDisplayName());
+            infoText.setText(musicItem.getDescription());
+            Uri musicUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, musicItem.getId());
+            Log.v(TAG, "Playing music uri: " + musicUri);
             Intent playIntent = new Intent(MusicService.ACTION_PLAY, musicUri, getApplicationContext(), MusicService.class);
             startService(playIntent);
+        } else {
+            Toast.makeText(this, R.string.music_no_longer_found, Toast.LENGTH_SHORT).show();
         }
+        musicInfoCursor.close();
     }
 
     private void bindListeners() {
@@ -215,7 +243,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
         SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
         SearchView searchView = (SearchView) menu.findItem(R.id.search).getActionView();
         searchView.setSearchableInfo(searchManager.getSearchableInfo(getComponentName()));
-        searchView.setIconified(false);
+        //searchView.setIconified(false);
 
         return true;
     }

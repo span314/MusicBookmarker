@@ -3,4 +3,7 @@
     <string name="action_settings">Settings</string>
     <string name="search_hint">Search Music</string>
     <string name="search_title">Search Music</string>
+    <string name="search_no_matches">No matches found for search term.</string>
+    <string name="music_no_longer_found">Failed to find music track. Has the track been deleted?</string>
+    <string name="music_modified">This music track appears to have been moved or changed. Linking bookmarks to most similar track.</string>
 </resources>

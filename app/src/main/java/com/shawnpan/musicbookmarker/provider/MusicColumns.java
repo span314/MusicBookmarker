@@ -11,6 +11,11 @@ import java.util.Arrays;
  */
 public class MusicColumns implements MediaStore.Audio.AudioColumns {
     /**
+     * Table name for music tracks
+     */
+    public static final String TABLE = "music";
+
+    /**
      * Timestamp of last time a music track was used
      */
     public static final String LAST_USED = "last_used";

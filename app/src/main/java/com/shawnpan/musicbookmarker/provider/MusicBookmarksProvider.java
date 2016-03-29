@@ -23,20 +23,23 @@ public class MusicBookmarksProvider extends ContentProvider {
     private static final String TAG = "MusicBookmarkerProvider";
 
     private static final String AUTHORITY = "com.shawnpan.musicbookmarker.provider.MusicBookmarksProvider";
-    private static final String TABLE_MUSIC = MusicBookmarksDatabaseHelper.TABLE_MUSIC;
+    private static final String CONTENT_AUTHORITY = "content://" + AUTHORITY + "/";
 
     private static final Uri SEARCH_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
-    private static final Uri MUSIC_TABLE_URI = Uri.parse("content://" + AUTHORITY + "/" + TABLE_MUSIC);
+    private static final Uri MUSIC_TABLE_URI = Uri.parse(CONTENT_AUTHORITY + MusicColumns.TABLE);
+    public static final Uri BOOKMARK_TABLE_URI = Uri.parse(CONTENT_AUTHORITY + BookmarkColumns.TABLE);
     private static final String GET_INFO = "get_info";
-    public static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + SearchManager.SUGGEST_URI_PATH_QUERY);
-    public static final Uri GET_INFO_URI = Uri.parse("content://" + AUTHORITY + "/" + GET_INFO);
+    public static final Uri SUGGESTIONS_URI = Uri.parse(CONTENT_AUTHORITY + SearchManager.SUGGEST_URI_PATH_QUERY);
+    public static final Uri GET_INFO_URI = Uri.parse(CONTENT_AUTHORITY + GET_INFO);
 
     private static final int URI_MATCH_SUGGEST = 1;
     private static final int URI_MATCH_GET = 2;
+    private static final int URI_MATCH_BOOKMARK = 3;
     private static final UriMatcher URI_MATCHER = new UriMatcher(UriMatcher.NO_MATCH);
     static {
         URI_MATCHER.addURI(AUTHORITY, SearchManager.SUGGEST_URI_PATH_QUERY, URI_MATCH_SUGGEST);
         URI_MATCHER.addURI(AUTHORITY, GET_INFO, URI_MATCH_GET);
+        URI_MATCHER.addURI(AUTHORITY, BookmarkColumns.TABLE, URI_MATCH_BOOKMARK);
     }
 
     private SQLiteOpenHelper openHelper;
@@ -56,6 +59,9 @@ public class MusicBookmarksProvider extends ContentProvider {
             case URI_MATCH_GET:
                 //Query by id - everything except selectionArgs[0] is ignored
                 return getById(selectionArgs[0]);
+            case URI_MATCH_BOOKMARK:
+                //Query by id - everything except selectionArgs[0] is ignored
+                return getBookmarks(selectionArgs[0]);
         }
         throw new IllegalArgumentException("Invalid query URI: " + uri);
     }
@@ -104,7 +110,7 @@ public class MusicBookmarksProvider extends ContentProvider {
         MusicSuggestionsCursor suggestionsCursor = new MusicSuggestionsCursor();
 
         //First query local music table
-        Cursor recentCursor = db.query(TABLE_MUSIC, MusicColumns.PROJECTION, recentFilter, recentArgs, null, null, RECENT_ORDER_BY, RECENT_LIMIT);
+        Cursor recentCursor = db.query(MusicColumns.TABLE, MusicColumns.PROJECTION, recentFilter, recentArgs, null, null, RECENT_ORDER_BY, RECENT_LIMIT);
         while (recentCursor.moveToNext()) {
             suggestionsCursor.addUnique(MusicItem.fromMusicTableCursor(recentCursor));
         }
@@ -154,7 +160,7 @@ public class MusicBookmarksProvider extends ContentProvider {
         //Select from music table by id
         MusicItem musicTableItem = null;
         SQLiteDatabase db = openHelper.getReadableDatabase();
-        Cursor musicTableCursor = db.query(TABLE_MUSIC, MusicColumns.PROJECTION, ID_FILTER, idArgs, null, null, null, null);
+        Cursor musicTableCursor = db.query(MusicColumns.TABLE, MusicColumns.PROJECTION, ID_FILTER, idArgs, null, null, null, null);
         if (musicTableCursor.moveToFirst()) {
             musicTableItem = MusicItem.fromMusicTableCursor(musicTableCursor);
         }
@@ -198,7 +204,7 @@ public class MusicBookmarksProvider extends ContentProvider {
         } else if (result.getCount() == 0) {
             //TODO label entry as broken if bookmarks still exist
             db = openHelper.getWritableDatabase();
-            db.delete(TABLE_MUSIC, ID_FILTER, idArgs);
+            db.delete(MusicColumns.TABLE, ID_FILTER, idArgs);
         } else {
             //TODO select correct match, for now assume file has moved and take the highest id (most recent update)
             asyncSaveRecentQuery(getContext(), Long.parseLong(id), mediaStoreItem);
@@ -206,6 +212,24 @@ public class MusicBookmarksProvider extends ContentProvider {
 
         return result;
     }
+
+    /*
+     * Query for bookmarks
+     */
+    private static final String MUSIC_ID_FILTER = BookmarkColumns.MUSIC_ID + " = ?";
+    private static final String BOOKMARKS_ORDER_BY = BookmarkColumns.POSITION + " ASC";
+
+    /**
+     * Lookup bookmarks by music id
+     * @param musicId id of music
+     * @return cursor of bookmarks
+     */
+    private Cursor getBookmarks(String musicId) {
+        SQLiteDatabase db = openHelper.getReadableDatabase();
+        String[] musicIdArgs = new String[] {musicId};
+        return db.query(BookmarkColumns.TABLE, BookmarkColumns.PROJECTION, MUSIC_ID_FILTER, musicIdArgs, null, null, BOOKMARKS_ORDER_BY, null);
+    }
+
 
     @Override
     public String getType(Uri uri) {
@@ -221,7 +245,7 @@ public class MusicBookmarksProvider extends ContentProvider {
 
         //TODO check valid uri?
 
-        long rowID = db.insertWithOnConflict(TABLE_MUSIC, MusicColumns.LAST_USED, values, SQLiteDatabase.CONFLICT_REPLACE);
+        long rowID = db.insertWithOnConflict(MusicColumns.TABLE, MusicColumns.LAST_USED, values, SQLiteDatabase.CONFLICT_REPLACE);
         if (rowID < 0) {
             throw new IllegalArgumentException("Error inserting values to suggestions table");
         }
@@ -234,7 +258,7 @@ public class MusicBookmarksProvider extends ContentProvider {
     public int delete(Uri uri, String selection, String[] selectionArgs) {
         SQLiteDatabase db = openHelper.getWritableDatabase();
 
-        int count = db.delete(TABLE_MUSIC, selection, selectionArgs);
+        int count = db.delete(MusicColumns.TABLE, selection, selectionArgs);
         getContext().getContentResolver().notifyChange(uri, null);
         return count;
     }
@@ -311,7 +335,7 @@ public class MusicBookmarksProvider extends ContentProvider {
             String selection = null;
             if (maxEntries > 0) {
                 selection = MusicColumns._ID + " IN " +
-                        "(SELECT " + MusicColumns._ID + " FROM " + TABLE_MUSIC +
+                        "(SELECT " + MusicColumns._ID + " FROM " + MusicColumns.TABLE +
                         " ORDER BY " + MusicColumns.LAST_USED + " DESC" +
                         " LIMIT -1 OFFSET " + String.valueOf(maxEntries) + ")";
             }

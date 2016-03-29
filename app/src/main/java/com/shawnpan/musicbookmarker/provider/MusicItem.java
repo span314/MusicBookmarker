@@ -24,8 +24,17 @@ public class MusicItem {
     private String displayName;
     private String icon;
 
+    /**
+     * Private constructor - use one of the factory methods
+     */
     private MusicItem() {}
 
+    /**
+     * Create an instance from current position in cursor matching the schema
+     * in {@link MusicColumns#MEDIASTORE_PROJECTION}
+     * @param cursor input cursor
+     * @return new MusicItem
+     */
     public static MusicItem fromMediaStoreCursor(Cursor cursor) {
         MusicItem item = loadCommonFields(cursor);
         item.displayName = item.title;
@@ -33,6 +42,12 @@ public class MusicItem {
         return item;
     }
 
+    /**
+     * Create an instance from current position in cursor matching the schema
+     * in {@link MusicColumns#PROJECTION}
+     * @param cursor input cursor
+     * @return new MusicItem
+     */
     public static MusicItem fromMusicTableCursor(Cursor cursor) {
         MusicItem item = loadCommonFields(cursor);
         item.displayName = cursor.getString(MusicColumns.COLUMN_INDEX_DISPLAY_NAME);
@@ -40,6 +55,11 @@ public class MusicItem {
         return item;
     }
 
+    /**
+     * Load fields common to both cursor schemas
+     * @param cursor input cursor
+     * @return new MusicItem
+     */
     private static MusicItem loadCommonFields(Cursor cursor) {
         MusicItem item = new MusicItem();
         item.id = cursor.getLong(MusicColumns.COLUMN_INDEX_ID);
@@ -49,30 +69,51 @@ public class MusicItem {
         return item;
     }
 
+    /**
+     * @return id of track
+     */
     public long getId() {
         return id;
     }
 
+    /**
+     * @return title of track
+     */
     public String getTitle() {
         return title;
     }
 
+    /**
+     * @return album of track
+     */
     public String getAlbum() {
         return album;
     }
 
+    /**
+     * @return artist of track
+     */
     public String getArtist() {
         return artist;
     }
 
+    /**
+     * @return display name of track
+     */
     public String getDisplayName() {
         return displayName;
     }
 
+    /**
+     * @return uri for the icon to display for this track in searches
+     */
     public String getIcon() {
         return icon;
     }
 
+    /**
+     * @return description string of track
+     */
     public String getDescription() {
         if (TextUtils.equals(title, displayName)) {
             return concatNonEmpty(album, artist);
@@ -81,6 +122,11 @@ public class MusicItem {
         }
     }
 
+    /**
+     * Helper method to concatenate non empty fields associated with a track
+     * @param parts to concatenate
+     * @return concatenated parts separated by {@link MusicItem#SEPARATOR}
+     */
     private static String concatNonEmpty(String... parts) {
         StringBuilder builder = new StringBuilder();
         for (String part : parts) {

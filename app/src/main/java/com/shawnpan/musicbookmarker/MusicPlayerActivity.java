@@ -24,7 +24,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.shawnpan.musicbookmarker.provider.MusicItem;
-import com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider;
+import com.shawnpan.musicbookmarker.provider.MusicBookmarksProvider;
 
 public class MusicPlayerActivity extends ActionBarActivity {
     private static final String TAG = "MusicPlayerActivity";
@@ -93,7 +93,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
 
     private void playMusicBySearchString(String query) {
         String[] musicSearchArgs = new String[] {query};
-        Cursor musicSearchCursor = getContentResolver().query(MusicSuggestionsProvider.SUGGESTIONS_URI, null, null, musicSearchArgs, null);
+        Cursor musicSearchCursor = getContentResolver().query(MusicBookmarksProvider.SUGGESTIONS_URI, null, null, musicSearchArgs, null);
         if (musicSearchCursor.moveToFirst()) {
             Log.v(TAG, "Taking first match for query: " + query);
             String idString = Long.toString(musicSearchCursor.getLong(musicSearchCursor.getColumnIndex(BaseColumns._ID)));
@@ -106,7 +106,7 @@ public class MusicPlayerActivity extends ActionBarActivity {
 
     private void playMusicById(String idString) {
         String[] musicIdLookupArgs = new String[] {idString};
-        Cursor musicInfoCursor = getContentResolver().query(MusicSuggestionsProvider.GET_INFO_URI, null, null, musicIdLookupArgs, null);
+        Cursor musicInfoCursor = getContentResolver().query(MusicBookmarksProvider.GET_INFO_URI, null, null, musicIdLookupArgs, null);
         if (musicInfoCursor.moveToFirst()) {
             if (musicInfoCursor.getCount() > 1) {
                 Log.w(TAG, "Warning multiple matches, taking first match");

@@ -9,6 +9,9 @@ import android.util.Log;
  * Database builder
  */
 public class MusicBookmarksDatabaseHelper extends SQLiteOpenHelper {
+    /**
+     * Table name for music tracks
+     */
     public static final String TABLE_MUSIC = "music";
 
     private static final String TAG = "MusicBookmarkerProvider";
@@ -35,6 +38,10 @@ public class MusicBookmarksDatabaseHelper extends SQLiteOpenHelper {
                     "CREATE INDEX artist_key_index ON " + TABLE_MUSIC + "(" + MusicColumns.ARTIST_KEY + ")";
     private static final String DROP_COMMAND = "DROP TABLE IF EXISTS " + TABLE_MUSIC;
 
+    /**
+     * Constructor
+     * @param context context of application
+     */
     public MusicBookmarksDatabaseHelper(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
     }

@@ -33,8 +33,8 @@
         </activity>
 
         <provider
-            android:name=".provider.MusicSuggestionsProvider"
-            android:authorities="com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider" />
+            android:name=".provider.MusicBookmarksProvider"
+            android:authorities="com.shawnpan.musicbookmarker.provider.MusicBookmarksProvider" />
 
         <service android:exported="false" android:name=".MusicService">
             <intent-filter>

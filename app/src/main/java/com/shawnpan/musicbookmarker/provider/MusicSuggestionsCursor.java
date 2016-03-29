@@ -21,10 +21,17 @@ public class MusicSuggestionsCursor extends MatrixCursor {
     };
     private Set<Long> addedIds = new HashSet<>();
 
+    /**
+     * Constructor - creates MatrixCursor for suggestions
+     */
     public MusicSuggestionsCursor() {
         super(SUGGESTION_COLUMNS);
     }
 
+    /**
+     * Adds an entry to this cursor iff the id is unique
+     * @param item item to add
+     */
     public void addUnique(MusicItem item) {
         if (addedIds.add(item.getId())) {
             newRow()

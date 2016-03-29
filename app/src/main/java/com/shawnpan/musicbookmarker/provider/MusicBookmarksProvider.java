@@ -11,18 +11,18 @@ import android.database.MatrixCursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
-import android.provider.BaseColumns;
+import android.os.Bundle;
 import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Log;
 
 /**
- * Content provider for search suggestions.
+ * Content provider for music bookmarks.
  */
-public class MusicSuggestionsProvider extends ContentProvider {
+public class MusicBookmarksProvider extends ContentProvider {
     private static final String TAG = "MusicBookmarkerProvider";
 
-    private static final String AUTHORITY = "com.shawnpan.musicbookmarker.provider.MusicSuggestionsProvider";
+    private static final String AUTHORITY = "com.shawnpan.musicbookmarker.provider.MusicBookmarksProvider";
     private static final String TABLE_MUSIC = MusicBookmarksDatabaseHelper.TABLE_MUSIC;
 
     private static final Uri SEARCH_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
@@ -30,7 +30,6 @@ public class MusicSuggestionsProvider extends ContentProvider {
     private static final String GET_INFO = "get_info";
     public static final Uri SUGGESTIONS_URI = Uri.parse("content://" + AUTHORITY + "/" + SearchManager.SUGGEST_URI_PATH_QUERY);
     public static final Uri GET_INFO_URI = Uri.parse("content://" + AUTHORITY + "/" + GET_INFO);
-
 
     private static final int URI_MATCH_SUGGEST = 1;
     private static final int URI_MATCH_GET = 2;
@@ -52,14 +51,18 @@ public class MusicSuggestionsProvider extends ContentProvider {
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         switch (URI_MATCHER.match(uri)) {
             case URI_MATCH_SUGGEST:
+                //Query for search suggestions - everything except selectionArgs[0] is ignored
                 return getSuggestions(selectionArgs[0]);
             case URI_MATCH_GET:
+                //Query by id - everything except selectionArgs[0] is ignored
                 return getById(selectionArgs[0]);
-                //TODO allow arbitrary queries?
         }
         throw new IllegalArgumentException("Invalid query URI: " + uri);
     }
 
+    /*
+     * Query for search suggestions
+     */
     private static final int SUGGESTION_RESULT_LIMIT = 50;
 
     private static final String RECENT_FILTER =
@@ -77,6 +80,11 @@ public class MusicSuggestionsProvider extends ContentProvider {
             MusicColumns.ARTIST_KEY + " LIKE ?)";
     private static final String SEARCH_ORDER_BY_LIMIT = MusicColumns.TITLE + " ASC LIMIT " + SUGGESTION_RESULT_LIMIT;
 
+    /**
+     * Find search suggestions. First looks in the local music table, then in the mediastore.
+     * @param keyword search term
+     * @return cursor of suggestions. See {@link MusicSuggestionsCursor} for schema of cursor output.
+     */
     private Cursor getSuggestions(String keyword) {
         SQLiteDatabase db = openHelper.getReadableDatabase();
 
@@ -112,11 +120,32 @@ public class MusicSuggestionsProvider extends ContentProvider {
         return suggestionsCursor;
     }
 
+    /*
+     * Query for music item by id
+     */
     private static final String ID_FILTER = MusicColumns._ID + " = ?";
     private static final String TITLE_ALBUM_ARTIST_FILTER =
             MusicColumns.TITLE + " = ? AND " + MusicColumns.ALBUM + " = ? AND " + MusicColumns.ARTIST + " = ?";
     private static final String ID_ASC_ORDER = MusicColumns._ID + " ASC";
 
+    /**
+     * Gets information on a music track by id.
+     * <p>
+     * Warning: this query method has side effects - it attempts to synchronize the local music table
+     * with the mediastore if necessary, and updates the last used time.
+     * <p>
+     * If the id only exists in the local music table, this method attempts to find a matching track
+     * by title, album, and artist (in case the file was moved). If the id only exists in the mediastore,
+     * a new entry in the local table will be created.
+     *
+     * Usually, the cursor will contain one entry corresponding to the input id. A empty cursor may
+     * be returned if no match could be found. In rare cases, a cursor with multiple entries may be
+     * returned if the fallback lookup by title/album/artist does not produce a unique result.
+     * See {@link MusicColumns} for schema of cursor.
+     *
+     * @param id id of music item (corresponding to either the local table OR mediastore)
+     * @return cursor with information on the music track.
+     */
     private Cursor getById(String id) {
         MatrixCursor result = new MatrixCursor(MusicColumns.PROJECTION);
 
@@ -215,12 +244,21 @@ public class MusicSuggestionsProvider extends ContentProvider {
         throw new UnsupportedOperationException("Update not supported");
     }
 
+    public static final String METHOD_CLEAR_HISTORY = "clearHistory";
+    @Override
+    public Bundle call(String method, String arg, Bundle extras) {
+        switch (method) {
+            case METHOD_CLEAR_HISTORY:
+                truncateHistory(getContext().getContentResolver(), 0);
+                return null;
+        }
+        throw new IllegalArgumentException("Unknown call method " + method);
+    }
+
 
     /*
      * Utility methods for updating suggestions
      */
-
-
     private static final int MAX_HISTORY_COUNT = 100;
 
     /**
@@ -258,19 +296,6 @@ public class MusicSuggestionsProvider extends ContentProvider {
     }
 
     /**
-     * Completely delete the history.  Use this call to implement a "clear history" UI.
-     *
-     * Any application that implements search suggestions based on previous actions (such as
-     * recent queries, page/items viewed, etc.) should provide a way for the user to clear the
-     * history.  This gives the user a measure of privacy, if they do not wish for their recent
-     * searches to be replayed by other users of the device (via suggestions).
-     */
-    public static void clearHistory(Context context) {
-        ContentResolver cr = context.getContentResolver();
-        truncateHistory(cr, 0);
-    }
-
-    /**
      * Reduces the length of the history table, to prevent it from growing too large.
      *
      * @param cr Convenience copy of the content resolver.
@@ -285,8 +310,8 @@ public class MusicSuggestionsProvider extends ContentProvider {
             // null means "delete all".  otherwise "delete but leave n newest"
             String selection = null;
             if (maxEntries > 0) {
-                selection = BaseColumns._ID + " IN " +
-                        "(SELECT " + BaseColumns._ID + " FROM " + TABLE_MUSIC +
+                selection = MusicColumns._ID + " IN " +
+                        "(SELECT " + MusicColumns._ID + " FROM " + TABLE_MUSIC +
                         " ORDER BY " + MusicColumns.LAST_USED + " DESC" +
                         " LIMIT -1 OFFSET " + String.valueOf(maxEntries) + ")";
             }
